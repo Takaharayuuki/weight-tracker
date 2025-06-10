@@ -49,15 +49,27 @@ app.use('/temp', express.static(path.join(__dirname, '../temp')));
 
 // ヘルスチェックエンドポイント
 app.get('/health', (req, res) => {
-  const googleAuth = process.env.GOOGLE_CREDENTIALS_BASE64 ? 'environment' : 
-                    require('fs').existsSync(require('path').join(__dirname, '../credentials.json')) ? 'file' : 'none';
+  const googleAuth = process.env.NODE_ENV === 'production' ? 
+    (require('fs').existsSync('/etc/secrets/credentials.json') ? 'file' : 'none') :
+    (require('fs').existsSync(require('path').join(__dirname, '../credentials.json')) ? 'file' : 'none');
+  
+  // ユーザー状態統計を取得
+  const userStateStore = require('./data/userStateStore');
+  const userStore = require('./data/userStore');
+  const stateStats = userStateStore.getStateStats();
+  const userCount = userStore.getUserCount();
   
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     googleAuth: googleAuth,
-    lineConfigured: !!(process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_CHANNEL_SECRET)
+    lineConfigured: !!(process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_CHANNEL_SECRET),
+    userStats: {
+      totalUsers: userCount,
+      activeStates: stateStats.total,
+      stateBreakdown: stateStats.byType
+    }
   });
 });
 

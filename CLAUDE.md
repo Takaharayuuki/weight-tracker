@@ -24,9 +24,11 @@ ngrok http 3000     # Expose local server for LINE webhook testing
 
 ### Core Components
 - **LINE Bot Handler** (`src/services/lineBot.js`): Processes incoming LINE messages, handles user registration and weight recording
+- **User State Store** (`src/data/userStateStore.js`): Manages temporary user states for multi-step operations
 - **Google Sheets Integration** (`src/services/sheets.js`): Manages data persistence to Google Sheets
 - **Scheduler** (`src/services/scheduler.js`): Handles cron jobs for morning greetings and evening reminders
 - **User Store** (`src/data/userStore.js`): In-memory user data management (Map-based, to be migrated to database)
+- **Graph Generator** (`src/utils/graphGenerator.js`): Chart.js-based weight progress visualization
 
 ### Data Flow
 1. User sends message to LINE bot
@@ -38,7 +40,9 @@ ngrok http 3000     # Expose local server for LINE webhook testing
 ### Message Processing Logic
 - New users: 4-step registration flow (goal weight, current weight, height, wake time)
 - Registered users: Direct weight recording with validation
+- Rich menu actions: Tap-based commands for common operations
 - Graph commands: 「グラフ」「推移」「履歴」で visual chart generation
+- State management: Temporary user states for multi-step operations
 - Automatic reminders: Morning (at wake time) and evening (20:00) if no record
 
 ## Critical Implementation Notes
@@ -82,9 +86,33 @@ ngrok http 3000     # Expose local server for LINE webhook testing
    - 開発環境: `credentials.json` ファイル（プロジェクトルート）
    - 本番環境: Render.com Secret Files (`/etc/secrets/credentials.json`)
 
+## Rich Menu Actions
+
+### Supported Rich Menu Commands (Recommended Texts)
+- **"体重記録"**: Prompts for weight input with state management
+- **"グラフ"**: Generates and displays weight progression chart  
+- **"成果"**: Shows weekly statistics and progress analysis
+- **"設定"**: Displays current user settings and BMI
+- **"ヘルプ"**: Comprehensive usage guide with examples
+- **"目標変更"**: Interactive goal weight modification
+
+### Alternative Commands (Legacy Support)
+- Weight input: "今日の体重を記録", "記録"
+- Graph display: "グラフを表示", "推移", "履歴"
+- Progress: "今週の成果", "進捗"
+- Settings: "設定メニュー", "設定確認", "設定変更"
+- Help: "help", "使い方"
+- Goal change: "目標を再設定", "目標設定"
+
+### State Management
+- Temporary user states with 30-minute expiration
+- Automatic cleanup of expired states
+- Support for weight input and goal modification workflows
+
 ## Testing Approach
 
 - Unit tests for calculation utilities
 - Integration tests for LINE webhook handling
+- Rich menu action testing with state transitions
 - Mock Google Sheets API for testing
 - Test edge cases: invalid weight values, timezone handling, message formatting

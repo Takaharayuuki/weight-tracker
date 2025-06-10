@@ -140,6 +140,102 @@ function estimateBMR(weight, height, age = 30, gender = 'male') {
   return Math.round(bmr);
 }
 
+// 今週の成果を計算
+async function getWeeklyProgress(userId) {
+  try {
+    const userStore = require('../data/userStore');
+    
+    // ユーザーデータを取得
+    const userData = userStore.getUser(userId);
+    if (!userData) {
+      throw new Error('ユーザーデータが見つかりません');
+    }
+    
+    // 過去7日間のデータを取得
+    const weightHistory = await sheets.getUserWeightHistory(userId, 7);
+    
+    if (weightHistory.length === 0) {
+      return {
+        hasData: false,
+        message: '今週の記録がありません。体重を記録してから確認してください。'
+      };
+    }
+    
+    // 今週の統計を計算
+    const weights = weightHistory.map(record => record.weight);
+    const maxWeight = Math.max(...weights);
+    const minWeight = Math.min(...weights);
+    const currentWeight = weights[weights.length - 1];
+    const firstWeight = weights[0];
+    const weeklyAverage = weights.reduce((sum, weight) => sum + weight, 0) / weights.length;
+    
+    // 変化量を計算
+    const weeklyChange = currentWeight - firstWeight;
+    const goalWeight = userData.goalWeight;
+    const goalDifference = currentWeight - goalWeight;
+    
+    // 連続記録日数を計算
+    const consecutiveDays = calculateConsecutiveDays(weightHistory);
+    
+    return {
+      hasData: true,
+      recordCount: weightHistory.length,
+      currentWeight,
+      maxWeight,
+      minWeight,
+      weeklyAverage,
+      weeklyChange,
+      goalWeight,
+      goalDifference,
+      consecutiveDays,
+      weightHistory
+    };
+    
+  } catch (error) {
+    console.error('今週の成果計算エラー:', error);
+    return {
+      hasData: false,
+      error: error.message,
+      message: '成果の計算に失敗しました。'
+    };
+  }
+}
+
+// 連続記録日数を計算
+function calculateConsecutiveDays(weightHistory) {
+  if (weightHistory.length === 0) return 0;
+  
+  // 日付を降順にソート（最新が最初）
+  const sortedHistory = [...weightHistory].sort((a, b) => {
+    const dateA = new Date(a.date.replace(/\//g, '-'));
+    const dateB = new Date(b.date.replace(/\//g, '-'));
+    return dateB - dateA;
+  });
+  
+  let consecutiveDays = 1; // 最新の記録があるので1からスタート
+  
+  // 最新の記録から遡って連続日数をカウント
+  for (let i = 1; i < sortedHistory.length; i++) {
+    const currentDate = new Date(sortedHistory[i].date.replace(/\//g, '-'));
+    const previousDate = new Date(sortedHistory[i-1].date.replace(/\//g, '-'));
+    
+    currentDate.setHours(0, 0, 0, 0);
+    previousDate.setHours(0, 0, 0, 0);
+    
+    // 前日かチェック
+    const diffTime = previousDate - currentDate;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) {
+      consecutiveDays++;
+    } else {
+      break; // 連続が途切れた
+    }
+  }
+  
+  return consecutiveDays;
+}
+
 module.exports = {
   calculateBMI,
   getBMIStatus,
@@ -148,5 +244,7 @@ module.exports = {
   calculateWeightChange,
   predictGoalDate,
   calculateIdealWeight,
-  estimateBMR
+  estimateBMR,
+  getWeeklyProgress,
+  calculateConsecutiveDays
 };

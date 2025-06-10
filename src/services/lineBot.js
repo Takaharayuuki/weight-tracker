@@ -4,6 +4,7 @@ const sheets = require('./sheets');
 const messages = require('../utils/messages');
 const calculations = require('../utils/calculations');
 const { generateWeightGraph, generateTextHistory } = require('../utils/graphGenerator');
+const userStateStore = require('../data/userStateStore');
 
 // イベントハンドラー
 async function handleEvent(event) {
@@ -67,12 +68,51 @@ async function handleEvent(event) {
       // 登録済みユーザーの処理
       console.log('登録済みユーザーの処理');
       
-      // 特殊コマンドの処理
+      // ユーザーの状態をチェック
+      const userState = userStateStore.getUserState(userId);
+      
+      // リッチメニューからのアクション処理（推奨テキスト）
+      if (messageText === '体重記録' || messageText === '今日の体重を記録' || messageText === '記録') {
+        return handleWeightInputRequest(event, userId, user);
+      }
+      
+      if (messageText === 'グラフ' || messageText === 'グラフを表示') {
+        return handleGraphRequest(event, userId, user);
+      }
+      
+      if (messageText === '成果' || messageText === '今週の成果') {
+        return handleWeeklyProgressRequest(event, userId, user);
+      }
+      
+      if (messageText === '設定' || messageText === '設定メニュー' || messageText === '設定確認') {
+        return handleSettingsMenuRequest(event, userId, user);
+      }
+      
+      if (messageText === 'ヘルプ' || messageText === 'help') {
+        return handleHelpRequest(event, userId, user);
+      }
+      
+      if (messageText === '目標変更' || messageText === '目標を再設定' || messageText === '目標設定') {
+        return handleGoalResetRequest(event, userId, user);
+      }
+      
+      // ユーザーが体重入力待ち状態の場合
+      if (userState && userState.stateType === userStateStore.STATE_TYPES.WAITING_WEIGHT_INPUT) {
+        userStateStore.clearUserState(userId); // 状態をクリア
+        return handleWeightRecord(event, userId, messageText, user);
+      }
+      
+      // ユーザーが目標体重変更待ち状態の場合
+      if (userState && userState.stateType === userStateStore.STATE_TYPES.WAITING_GOAL_WEIGHT) {
+        return handleGoalWeightChange(event, userId, messageText, user);
+      }
+      
+      // 従来のコマンド処理（重複を避けた形で継続サポート）
       if (messageText === '進捗' || messageText === '進捗確認') {
         return handleProgressRequest(event, userId, user);
       }
       
-      if (messageText === 'グラフ' || messageText === '推移' || messageText === '履歴') {
+      if (messageText === '推移' || messageText === '履歴') {
         return handleGraphRequest(event, userId, user);
       }
       
@@ -80,7 +120,7 @@ async function handleEvent(event) {
         return client.replyMessage(event.replyToken, messages.getTipMessage());
       }
       
-      if (messageText === '設定' || messageText === '設定変更') {
+      if (messageText === '設定変更') {
         return handleSettingsRequest(event, userId, user);
       }
       
@@ -88,18 +128,8 @@ async function handleEvent(event) {
         return handleResetRequest(event, userId, user);
       }
       
-      if (messageText === 'ヘルプ' || messageText === 'help' || messageText === '使い方') {
-        return client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: `使い方
-
-体重記録: 数値を送信（例: 69.5）
-進捗確認: 「進捗」と送信
-グラフ表示: 「グラフ」「推移」「履歴」のいずれかを送信
-設定確認: 「設定」と送信  
-登録リセット: 「リセット」と送信
-ヒント: 「ヒント」と送信`
-        });
+      if (messageText === '使い方') {
+        return handleHelpRequest(event, userId, user);
       }
       
       // 数値の場合は体重記録
@@ -391,6 +421,194 @@ async function handleResetRequest(event, userId, user) {
 
 目標体重を入力してください。
 例: 65`
+  });
+}
+
+// 体重入力リクエストの処理（リッチメニュー用）
+async function handleWeightInputRequest(event, userId, user) {
+  console.log('体重入力リクエスト処理開始');
+  
+  // ユーザーを体重入力待ち状態に設定
+  userStateStore.setUserState(userId, userStateStore.STATE_TYPES.WAITING_WEIGHT_INPUT, {
+    requestedAt: new Date()
+  });
+  
+  return client.replyMessage(event.replyToken, {
+    type: 'text',
+    text: '📝 今日の体重を数値で入力してください\n\n例: 70.5\n\n※30分以内に入力してください'
+  });
+}
+
+// 今週の成果リクエストの処理
+async function handleWeeklyProgressRequest(event, userId, user) {
+  console.log('今週の成果リクエスト処理開始');
+  
+  try {
+    const progress = await calculations.getWeeklyProgress(userId);
+    
+    if (!progress.hasData) {
+      return client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: progress.message
+      });
+    }
+    
+    // 成果メッセージを作成
+    let progressMessage = `📊 今週の成果 (${progress.recordCount}日分の記録)\n\n`;
+    progressMessage += `📍 現在の体重: ${progress.currentWeight.toFixed(1)}kg\n`;
+    progressMessage += `📈 最高値: ${progress.maxWeight.toFixed(1)}kg\n`;
+    progressMessage += `📉 最低値: ${progress.minWeight.toFixed(1)}kg\n`;
+    progressMessage += `📊 平均: ${progress.weeklyAverage.toFixed(1)}kg\n\n`;
+    
+    // 変化量の表示
+    if (Math.abs(progress.weeklyChange) >= 0.1) {
+      const changeText = progress.weeklyChange > 0 ? 
+        `📈 +${progress.weeklyChange.toFixed(1)}kg` : 
+        `📉 ${progress.weeklyChange.toFixed(1)}kg`;
+      progressMessage += `🔄 週間変化: ${changeText}\n`;
+    } else {
+      progressMessage += `🔄 週間変化: ほぼ変化なし\n`;
+    }
+    
+    // 目標との差
+    if (progress.goalDifference <= 0) {
+      progressMessage += `🎯 目標達成！目標を${Math.abs(progress.goalDifference).toFixed(1)}kg下回っています\n`;
+    } else {
+      progressMessage += `🎯 目標まで: あと${progress.goalDifference.toFixed(1)}kg\n`;
+    }
+    
+    // 連続記録日数
+    progressMessage += `🔥 連続記録: ${progress.consecutiveDays}日\n\n`;
+    
+    // 励ましメッセージ
+    if (progress.weeklyChange < -0.5) {
+      progressMessage += `🎉 素晴らしい成果です！この調子で続けましょう！`;
+    } else if (progress.weeklyChange > 0.5) {
+      progressMessage += `💪 体重が増加していますが、焦らず継続しましょう。`;
+    } else {
+      progressMessage += `📈 着実に進歩しています。継続が力になります！`;
+    }
+    
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: progressMessage
+    });
+    
+  } catch (error) {
+    console.error('今週の成果計算エラー:', error);
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '申し訳ございません。成果の計算に失敗しました。\n\n後ほど再度お試しください。'
+    });
+  }
+}
+
+// 設定メニューリクエストの処理
+async function handleSettingsMenuRequest(event, userId, user) {
+  console.log('設定メニューリクエスト処理開始');
+  
+  const bmi = calculations.calculateBMI(user.currentWeight, user.height);
+  const bmiStatus = calculations.getBMIStatus(bmi);
+  
+  const settingsMessage = `⚙️ 現在の設定\n\n` +
+    `🎯 目標体重: ${user.goalWeight}kg\n` +
+    `📍 現在の体重: ${user.currentWeight}kg\n` +
+    `📏 身長: ${user.height}cm\n` +
+    `⏰ 起床時間: ${user.wakeTime}\n` +
+    `📊 BMI: ${bmi.toFixed(1)} (${bmiStatus})\n\n` +
+    `💡 設定を変更したい場合は以下をお試しください：\n` +
+    `• 目標体重変更: 「目標を再設定」\n` +
+    `• 完全リセット: 「リセット」`;
+  
+  return client.replyMessage(event.replyToken, {
+    type: 'text',
+    text: settingsMessage
+  });
+}
+
+// ヘルプリクエストの処理
+async function handleHelpRequest(event, userId, user) {
+  console.log('ヘルプリクエスト処理開始');
+  
+  const helpMessage = `📚 使い方ガイド\n\n` +
+    `【リッチメニュー（推奨）】\n` +
+    `下部のメニューからワンタップで操作：\n` +
+    `• 📝 体重記録: 体重入力をサポート\n` +
+    `• 📊 グラフ: 30日間の推移を表示\n` +
+    `• 📈 成果: 今週の詳細な成果\n` +
+    `• ⚙️ 設定: 現在の設定を確認\n` +
+    `• ❓ ヘルプ: このガイドを表示\n` +
+    `• 🎯 目標変更: 目標体重を変更\n\n` +
+    `【基本の使い方】\n` +
+    `• 体重記録: 数値を送信（例: 70.5）\n` +
+    `• 直接コマンド: 上記の日本語でも操作可能\n\n` +
+    `【従来のコマンド】\n` +
+    `• 進捗確認: 「進捗」\n` +
+    `• グラフ表示: 「推移」「履歴」\n` +
+    `• 完全リセット: 「リセット」\n` +
+    `• ヒント: 「ヒント」\n\n` +
+    `【自動機能】\n` +
+    `• 毎朝の挨拶メッセージ\n` +
+    `• 記録忘れの夜間リマインダー\n\n` +
+    `💡 リッチメニューが最も使いやすくておすすめです！`;
+  
+  return client.replyMessage(event.replyToken, {
+    type: 'text',
+    text: helpMessage
+  });
+}
+
+// 目標再設定リクエストの処理
+async function handleGoalResetRequest(event, userId, user) {
+  console.log('目標再設定リクエスト処理開始');
+  
+  // ユーザーを目標体重変更待ち状態に設定
+  userStateStore.setUserState(userId, userStateStore.STATE_TYPES.WAITING_GOAL_WEIGHT, {
+    currentGoal: user.goalWeight,
+    requestedAt: new Date()
+  });
+  
+  return client.replyMessage(event.replyToken, {
+    type: 'text',
+    text: `🎯 目標体重の変更\n\n現在の目標体重: ${user.goalWeight}kg\n\n新しい目標体重を数値で入力してください（30〜200kg）\n\n例: 65\n\n※キャンセルしたい場合は「キャンセル」と入力してください`
+  });
+}
+
+// 目標体重変更の処理
+async function handleGoalWeightChange(event, userId, messageText, user) {
+  console.log('目標体重変更処理開始');
+  
+  // キャンセル処理
+  if (messageText === 'キャンセル' || messageText === 'cancel') {
+    userStateStore.clearUserState(userId);
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '目標体重の変更をキャンセルしました。'
+    });
+  }
+  
+  // 数値検証
+  const newGoalWeight = parseFloat(messageText);
+  if (isNaN(newGoalWeight) || newGoalWeight < 30 || newGoalWeight > 200) {
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '正しい目標体重を入力してください（30〜200kg）\n\n例: 65\n\nキャンセルしたい場合は「キャンセル」と入力してください'
+    });
+  }
+  
+  // 目標体重を更新
+  const oldGoalWeight = user.goalWeight;
+  userStore.updateUser(userId, { goalWeight: newGoalWeight });
+  userStateStore.clearUserState(userId);
+  
+  const changeMessage = `🎯 目標体重を更新しました\n\n` +
+    `変更前: ${oldGoalWeight}kg\n` +
+    `変更後: ${newGoalWeight}kg\n\n` +
+    `新しい目標に向けて一緒に頑張りましょう！`;
+  
+  return client.replyMessage(event.replyToken, {
+    type: 'text',
+    text: changeMessage
   });
 }
 
