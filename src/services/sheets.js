@@ -458,7 +458,27 @@ async function appendWeight(userId, weight, userName = '') {
   }
 }
 
-// ユーザーの体重履歴を取得
+// 記録を日付でグループ化し、各日の最新記録のみを返す
+function getDailyLatestRecords(records) {
+  const dailyRecords = {};
+  
+  records.forEach(record => {
+    const dateKey = record.date || record[0]; // 日付を取得
+    const time = record.time || record[1]; // 時刻を取得
+    
+    if (!dailyRecords[dateKey] || time > dailyRecords[dateKey].time) {
+      dailyRecords[dateKey] = record;
+    }
+  });
+  
+  return Object.values(dailyRecords).sort((a, b) => {
+    const dateA = new Date(a.date || a[0]);
+    const dateB = new Date(b.date || b[0]);
+    return dateA - dateB; // 日付順でソート
+  });
+}
+
+// ユーザーの体重履歴を取得（同日複数記録の場合は最新のみ）
 async function getUserWeightHistory(userId, days = 7) {
   try {
     await initialize();
@@ -472,15 +492,21 @@ async function getUserWeightHistory(userId, days = 7) {
     const rows = result.data.values || [];
     const userRows = rows.filter(row => row[2] === userId);
     
-    // 最新のデータから指定日数分を取得
-    const recentRows = userRows.slice(-days);
-    
-    return recentRows.map(row => ({
+    // 全記録をマップに変換
+    const allRecords = userRows.map(row => ({
       date: row[0],
       time: row[1],
       weight: parseFloat(row[3]),
       name: row[4] || ''
     }));
+    
+    // 日別の最新記録のみを取得
+    const dailyLatestRecords = getDailyLatestRecords(allRecords);
+    
+    // 最新のデータから指定日数分を取得
+    const recentRecords = dailyLatestRecords.slice(-days);
+    
+    return recentRecords;
   } catch (error) {
     console.error('Google Sheetsからの読み取りエラー:', error);
     console.log('Google Sheets APIエラーのため、空の履歴を返します');
@@ -488,7 +514,7 @@ async function getUserWeightHistory(userId, days = 7) {
   }
 }
 
-// 全ユーザーのデータを取得（ダッシュボード用）
+// 全ユーザーのデータを取得（ダッシュボード用、同日複数記録の場合は最新のみ）
 async function getAllUsersData() {
   try {
     await initialize();
@@ -521,7 +547,14 @@ async function getAllUsersData() {
       }
     });
     
-    return userData;
+    // 各ユーザーのデータに対して日別最新記録のみを取得
+    const processedUserData = {};
+    
+    Object.keys(userData).forEach(userId => {
+      processedUserData[userId] = getDailyLatestRecords(userData[userId]);
+    });
+    
+    return processedUserData;
   } catch (error) {
     console.error('Google Sheetsからの読み取りエラー:', error);
     return {};
@@ -559,5 +592,6 @@ module.exports = {
   getAllUsers,
   updateUserName,
   ensureUserManagementSheet,
-  getMainSheetName
+  getMainSheetName,
+  getDailyLatestRecords
 };

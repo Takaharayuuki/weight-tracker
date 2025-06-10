@@ -18,7 +18,41 @@ app.use(cors({
   credentials: true
 }));
 
-// JSON解析用
+// LINE Webhookエンドポイント - GETリクエスト（LINE検証用）
+app.get('/webhook', (req, res) => {
+  res.status(200).send('OK');
+});
+
+// LINE Webhookエンドポイント - POSTリクエスト（実際のメッセージ処理）
+app.post('/webhook', lineBot.middleware, (req, res) => {
+  console.log('Webhook受信:', JSON.stringify(req.body, null, 2));
+  
+  if (!req.body.events || req.body.events.length === 0) {
+    console.log('イベントが空です');
+    return res.status(200).send('OK');
+  }
+  
+  // タイムアウト付きでイベント処理
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Webhook処理タイムアウト')), 15000)
+  );
+  
+  Promise.race([
+    Promise.all(req.body.events.map(lineBot.handleEvent)),
+    timeoutPromise
+  ])
+    .then((result) => {
+      console.log('Webhook処理完了:', result);
+      res.status(200).send('OK');
+    })
+    .catch((err) => {
+      console.error('Webhook処理エラー:', err);
+      // タイムアウトエラーでも200を返す（LINEに再送防止）
+      res.status(200).send('OK');
+    });
+});
+
+// JSON解析用ミドルウェア（LINE webhook後に配置）
 app.use(express.json());
 
 // ダッシュボード用API認証
@@ -145,7 +179,7 @@ app.get('/api/users/:userId', requireAuth, async (req, res) => {
     const weeklyAverage = await calculations.getWeeklyAverage(userId);
     const monthlyAverage = await calculations.getMonthlyAverage(userId);
     
-    // 進捗計算
+    // 進捗計算（日別最新記録を使用）
     const weightDiff = user.goalWeight - user.currentWeight;
     const initialWeight = weightHistory.length > 0 ? weightHistory[0].weight : user.currentWeight;
     const totalTarget = user.goalWeight - initialWeight;
@@ -174,7 +208,7 @@ app.get('/api/users/:userId', requireAuth, async (req, res) => {
         date: record.date,
         weight: record.weight,
         name: record.name
-      }))
+      })) // 既に日別最新記録のみを含む
     };
     
     console.log(`ダッシュボードAPI: ユーザー詳細を返却 ${userId}`);
@@ -270,6 +304,9 @@ app.get('/api/dashboard-stats', requireAuth, async (req, res) => {
 app.get('/webhook', (req, res) => {
   res.status(200).send('OK');
 });
+
+// JSON解析用（LINE webhookの後に配置）
+app.use(express.json());
 
 // Webhookエンドポイント - POSTリクエスト（実際のメッセージ処理）
 app.post('/webhook', lineBot.middleware, (req, res) => {
