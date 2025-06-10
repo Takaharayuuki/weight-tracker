@@ -8,6 +8,7 @@ const userStates = new Map();
 const STATE_TYPES = {
   WAITING_WEIGHT_INPUT: 'WAITING_WEIGHT_INPUT',        // 体重入力待ち
   WAITING_GOAL_WEIGHT: 'WAITING_GOAL_WEIGHT',          // 目標体重変更待ち
+  WAITING_NAME_CHANGE: 'WAITING_NAME_CHANGE',          // 名前変更待ち
   NORMAL: 'NORMAL'                                     // 通常状態
 };
 

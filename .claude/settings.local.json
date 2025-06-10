@@ -12,7 +12,9 @@
       "Bash(grep:*)",
       "Bash(node test-graph-direct.js)",
       "Bash(node:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(lsof:*)",
+      "Bash(kill:*)"
     ],
     "deny": []
   }

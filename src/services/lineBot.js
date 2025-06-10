@@ -60,7 +60,7 @@ async function handleEvent(event) {
       userStore.createUser(userId);
       userStore.updateUser(userId, { registrationStep: 1 });
       return client.replyMessage(event.replyToken, messages.getWelcomeMessage());
-    } else if (!user.isCompleted || user.registrationStep < 5) {
+    } else if (!user.isCompleted || user.registrationStep < 6) {
       // 登録途中のユーザー
       console.log('登録フローの処理');
       return handleRegistrationFlow(event, userId, messageText, user);
@@ -96,6 +96,16 @@ async function handleEvent(event) {
         return handleGoalResetRequest(event, userId, user);
       }
       
+      // 名前変更コマンド
+      if (messageText === '名前を設定' || messageText === '名前変更') {
+        return handleNameChangeRequest(event, userId, user);
+      }
+      
+      // 「私は〇〇」「名前は〇〇」パターンでの名前変更
+      if (messageText.startsWith('私は') || messageText.startsWith('名前は')) {
+        return handleNameChange(event, userId, messageText, user);
+      }
+      
       // ユーザーが体重入力待ち状態の場合
       if (userState && userState.stateType === userStateStore.STATE_TYPES.WAITING_WEIGHT_INPUT) {
         userStateStore.clearUserState(userId); // 状態をクリア
@@ -105,6 +115,11 @@ async function handleEvent(event) {
       // ユーザーが目標体重変更待ち状態の場合
       if (userState && userState.stateType === userStateStore.STATE_TYPES.WAITING_GOAL_WEIGHT) {
         return handleGoalWeightChange(event, userId, messageText, user);
+      }
+      
+      // ユーザーが名前変更待ち状態の場合
+      if (userState && userState.stateType === userStateStore.STATE_TYPES.WAITING_NAME_CHANGE) {
+        return handleNameChangeState(event, userId, messageText, user);
       }
       
       // 従来のコマンド処理（重複を避けた形で継続サポート）
@@ -157,15 +172,27 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
   const value = parseFloat(messageText);
   
   switch (user.registrationStep) {
-    case 0: // 初回メッセージ後、目標体重入力待ち
-    case 1: // 目標体重の入力
-      if (messageText === 'その他の目標体重を入力します') {
+    case 0: // 初回メッセージ後、名前入力待ち
+    case 1: // 名前の入力
+      if (messageText.length > 20) {
         return client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '目標体重を数値で入力してください。\n例: 65'
+          text: 'お名前は20文字以内で入力してください。'
         });
       }
       
+      const updatedUser = userStore.updateUser(userId, { 
+        name: messageText, 
+        registrationStep: 2 
+      });
+      
+      console.log('名前を保存しました:', messageText, 'ユーザー状態:', updatedUser);
+      
+      return client.replyMessage(event.replyToken, 
+        messages.getRegistrationStepMessage(1, { name: messageText })
+      );
+      
+    case 2: // 目標体重の入力
       if (isNaN(value) || value < 30 || value > 200) {
         return client.replyMessage(event.replyToken, {
           type: 'text',
@@ -173,18 +200,18 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
         });
       }
       
-      const updatedUser = userStore.updateUser(userId, { 
+      userStore.updateUser(userId, { 
         goalWeight: value, 
-        registrationStep: 2 
+        registrationStep: 3 
       });
       
-      console.log('目標体重を保存しました:', value, 'ユーザー状態:', updatedUser);
+      console.log('目標体重を保存しました:', value);
       
       return client.replyMessage(event.replyToken, 
-        messages.getRegistrationStepMessage(1, { goalWeight: value })
+        messages.getRegistrationStepMessage(2, { goalWeight: value })
       );
       
-    case 2: // 現在の体重の入力
+    case 3: // 現在の体重の入力
       if (isNaN(value) || value < 30 || value > 300) {
         return client.replyMessage(event.replyToken, {
           type: 'text',
@@ -194,14 +221,14 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
       
       userStore.updateUser(userId, { 
         currentWeight: value, 
-        registrationStep: 3 
+        registrationStep: 4 
       });
       
       return client.replyMessage(event.replyToken, 
-        messages.getRegistrationStepMessage(2, { currentWeight: value })
+        messages.getRegistrationStepMessage(3, { currentWeight: value })
       );
       
-    case 3: // 身長の入力
+    case 4: // 身長の入力
       if (isNaN(value) || value < 100 || value > 250) {
         return client.replyMessage(event.replyToken, {
           type: 'text',
@@ -211,14 +238,14 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
       
       userStore.updateUser(userId, { 
         height: value, 
-        registrationStep: 4 
+        registrationStep: 5 
       });
       
       return client.replyMessage(event.replyToken, 
-        messages.getRegistrationStepMessage(3, { height: value })
+        messages.getRegistrationStepMessage(4, { height: value })
       );
       
-    case 4: // 起床時間の入力
+    case 5: // 起床時間の入力
       const timePattern = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
       if (!timePattern.test(messageText)) {
         return client.replyMessage(event.replyToken, {
@@ -230,7 +257,7 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
       // 登録完了
       const finalUser = userStore.updateUser(userId, { 
         wakeTime: messageText, 
-        registrationStep: 5,
+        registrationStep: 6,
         isCompleted: true 
       });
       
@@ -242,7 +269,7 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
       const response = client.replyMessage(event.replyToken, [
         {
           type: 'text',
-          text: `登録完了
+          text: `${finalUser.name}さん、登録完了です！
 
 目標体重: ${finalUser.goalWeight}kg
 現在の体重: ${finalUser.currentWeight}kg
@@ -253,8 +280,19 @@ BMI: ${bmi.toFixed(1)} (${bmiStatus})`
         messages.getMotivationalMessage(finalUser.currentWeight, finalUser.goalWeight, true)
       ]);
 
-      // Google Sheetsへの初回記録は非同期で実行
-      sheets.appendWeight(userId, finalUser.currentWeight).catch(error => {
+      // Google Sheetsへの初回記録と ユーザー管理シートへの保存
+      Promise.all([
+        sheets.appendWeight(userId, finalUser.currentWeight, finalUser.name),
+        sheets.saveUserInfo(userId, {
+          name: finalUser.name,
+          goalWeight: finalUser.goalWeight,
+          currentWeight: finalUser.currentWeight,
+          height: finalUser.height,
+          wakeTime: finalUser.wakeTime,
+          lastRecordDate: new Date().toISOString().split('T')[0].replace(/-/g, '/'),
+          consecutiveDays: 1
+        })
+      ]).catch(error => {
         console.error('Google Sheets記録エラー（登録時）:', error);
       });
 
@@ -286,17 +324,18 @@ async function handleWeightRecord(event, userId, messageText, user) {
   userStore.updateUser(userId, { currentWeight: weight, lastRecordDate: new Date() });
 
   // 先にユーザーに応答を返す（週平均計算は後で非同期実行）
+  const userName = user.name || 'ユーザー';
   const response = client.replyMessage(event.replyToken, [
     {
       type: 'text',
-      text: `${weight}kg記録しました`
+      text: `${userName}さん、${weight}kg記録しました`
     },
     messages.getMotivationalMessage(weight, user.goalWeight)
   ]);
 
   // Google Sheetsへの記録と週平均計算は非同期で実行
   Promise.all([
-    sheets.appendWeight(userId, weight),
+    sheets.appendWeight(userId, weight, userName),
     calculations.getWeeklyAverage(userId)
   ]).then(([sheetsResult, weeklyAverage]) => {
     console.log('Google Sheets記録結果:', sheetsResult);
@@ -510,13 +549,16 @@ async function handleSettingsMenuRequest(event, userId, user) {
   const bmi = calculations.calculateBMI(user.currentWeight, user.height);
   const bmiStatus = calculations.getBMIStatus(bmi);
   
+  const userName = user.name || '未設定';
   const settingsMessage = `⚙️ 現在の設定\n\n` +
+    `👤 名前: ${userName}\n` +
     `🎯 目標体重: ${user.goalWeight}kg\n` +
     `📍 現在の体重: ${user.currentWeight}kg\n` +
     `📏 身長: ${user.height}cm\n` +
     `⏰ 起床時間: ${user.wakeTime}\n` +
     `📊 BMI: ${bmi.toFixed(1)} (${bmiStatus})\n\n` +
     `💡 設定を変更したい場合は以下をお試しください：\n` +
+    `• 名前変更: 「名前を設定」\n` +
     `• 目標体重変更: 「目標を再設定」\n` +
     `• 完全リセット: 「リセット」`;
   
@@ -605,6 +647,103 @@ async function handleGoalWeightChange(event, userId, messageText, user) {
     `変更前: ${oldGoalWeight}kg\n` +
     `変更後: ${newGoalWeight}kg\n\n` +
     `新しい目標に向けて一緒に頑張りましょう！`;
+  
+  return client.replyMessage(event.replyToken, {
+    type: 'text',
+    text: changeMessage
+  });
+}
+
+// 名前変更リクエストの処理
+async function handleNameChangeRequest(event, userId, user) {
+  console.log('名前変更リクエスト処理開始');
+  
+  // ユーザーを名前変更待ち状態に設定
+  userStateStore.setUserState(userId, userStateStore.STATE_TYPES.WAITING_NAME_CHANGE, {
+    currentName: user.name,
+    requestedAt: new Date()
+  });
+  
+  const currentNameText = user.name ? `現在の名前: ${user.name}` : '現在名前が設定されていません';
+  
+  return client.replyMessage(event.replyToken, {
+    type: 'text',
+    text: `📝 名前の変更\n\n${currentNameText}\n\n新しい名前を入力してください（20文字以内）\n\n例: 田中\n\n※キャンセルしたい場合は「キャンセル」と入力してください`
+  });
+}
+
+// 「私は〇〇」「名前は〇〇」での名前変更処理
+async function handleNameChange(event, userId, messageText, user) {
+  console.log('名前変更処理開始:', messageText);
+  
+  let newName = '';
+  if (messageText.startsWith('私は')) {
+    newName = messageText.substring(2).trim();
+  } else if (messageText.startsWith('名前は')) {
+    newName = messageText.substring(3).trim();
+  }
+  
+  // 名前の検証
+  if (!newName || newName.length > 20) {
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '名前は20文字以内で入力してください。\n\n例: 私は田中\n例: 名前は田中'
+    });
+  }
+  
+  // 名前を更新
+  const oldName = user.name;
+  userStore.updateUser(userId, { name: newName });
+  
+  // Google Sheetsのユーザー管理シートも更新
+  sheets.updateUserName(userId, newName).catch(error => {
+    console.error('Google Sheetsユーザー名更新エラー:', error);
+  });
+  
+  const changeMessage = oldName ? 
+    `📝 名前を変更しました\n\n変更前: ${oldName}\n変更後: ${newName}\n\nよろしくお願いします、${newName}さん！` :
+    `📝 名前を設定しました\n\n${newName}さん、よろしくお願いします！`;
+  
+  return client.replyMessage(event.replyToken, {
+    type: 'text',
+    text: changeMessage
+  });
+}
+
+// 名前変更待ち状態での処理
+async function handleNameChangeState(event, userId, messageText, user) {
+  console.log('名前変更待ち状態処理開始');
+  
+  // キャンセル処理
+  if (messageText === 'キャンセル' || messageText === 'cancel') {
+    userStateStore.clearUserState(userId);
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '名前の変更をキャンセルしました。'
+    });
+  }
+  
+  // 名前の検証
+  if (messageText.length > 20) {
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '名前は20文字以内で入力してください。\n\n例: 田中\n\nキャンセルしたい場合は「キャンセル」と入力してください'
+    });
+  }
+  
+  // 名前を更新
+  const oldName = user.name;
+  userStore.updateUser(userId, { name: messageText });
+  userStateStore.clearUserState(userId);
+  
+  // Google Sheetsのユーザー管理シートも更新
+  sheets.updateUserName(userId, messageText).catch(error => {
+    console.error('Google Sheetsユーザー名更新エラー:', error);
+  });
+  
+  const changeMessage = oldName ? 
+    `📝 名前を変更しました\n\n変更前: ${oldName}\n変更後: ${messageText}\n\nよろしくお願いします、${messageText}さん！` :
+    `📝 名前を設定しました\n\n${messageText}さん、よろしくお願いします！`;
   
   return client.replyMessage(event.replyToken, {
     type: 'text',

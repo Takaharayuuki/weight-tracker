@@ -5,7 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>体重記録ダッシュボード</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --accent-color: #f093fb;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --info-color: #3498db;
+            --background: #f8f9fa;
+            --surface: #ffffff;
+            --text-primary: #2c3e50;
+            --text-secondary: #7f8c8d;
+            --border-color: #e9ecef;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --shadow-light: rgba(0, 0, 0, 0.05);
+        }
+
+        [data-theme="dark"] {
+            --background: #1a1a1a;
+            --surface: #2d2d2d;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --border-color: #404040;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --shadow-light: rgba(0, 0, 0, 0.15);
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -13,244 +41,1055 @@
         }
 
         body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f5f5f5;
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+            transition: all 0.3s ease;
         }
 
-        header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px 0;
+        /* Authentication Screen */
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        }
+
+        .auth-card {
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px var(--shadow);
+            width: 100%;
+            max-width: 400px;
             text-align: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
+        .auth-logo {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .auth-title {
+            color: var(--text-primary);
+            margin-bottom: 2rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 1rem;
+            background: var(--surface);
+            color: var(--text-primary);
+            transition: border-color 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px var(--shadow);
+        }
+
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text-primary);
+            border: 2px solid var(--border-color);
+        }
+
+        .btn-icon {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-icon:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 4px 20px var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* Navigation */
+        .nav-tabs {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 1rem;
+        }
+
+        .nav-tabs-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-tab {
+            padding: 1rem 0;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .nav-tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        .nav-tab:hover {
+            color: var(--primary-color);
+        }
+
+        /* Container */
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 2rem 1rem;
         }
 
+        /* Search */
+        .search-container {
+            margin-bottom: 2rem;
+        }
+
+        .search-input {
+            width: 100%;
+            max-width: 400px;
+            padding: 12px 16px 12px 40px;
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 1rem;
+            background: var(--surface);
+            color: var(--text-primary);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+        }
+
+        .search-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* Stats Grid */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin: 20px 0;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
 
         .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px var(--shadow-light);
             text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
         }
 
         .stat-number {
-            font-size: 2em;
+            font-size: 2.5rem;
             font-weight: bold;
-            color: #667eea;
-            margin: 10px 0;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
         }
 
         .stat-label {
-            color: #666;
-            font-size: 0.9em;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
         }
 
+        /* User Grid */
+        .users-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .user-card {
+            background: var(--surface);
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px var(--shadow-light);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px var(--shadow);
+        }
+
+        .user-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .user-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .user-streak {
+            background: var(--success-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .user-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .user-stat {
+            text-align: center;
+        }
+
+        .user-stat-value {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .user-stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .progress-container {
+            margin-top: 1rem;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success-color), var(--info-color));
+            transition: width 0.5s ease;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--surface);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+            animation: slideIn 0.3s ease;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        /* Chart Container */
         .chart-container {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin: 20px 0;
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px var(--shadow-light);
+            margin-bottom: 2rem;
         }
 
         .chart-title {
-            font-size: 1.2em;
-            margin-bottom: 20px;
-            color: #333;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .refresh-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1em;
-            margin: 10px;
-        }
-
-        .refresh-btn:hover {
-            background: #5a6fd8;
-        }
-
+        /* Loading & Error States */
         .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border-color);
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
 
         .error {
-            color: #e74c3c;
-            text-align: center;
-            padding: 20px;
-            background: #fff;
+            background: var(--danger-color);
+            color: white;
+            padding: 1rem 1.5rem;
             border-radius: 10px;
-            margin: 20px 0;
+            margin: 1rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
+        .success {
+            background: var(--success-color);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease;
+        }
+
+        .slide-in {
+            animation: slideIn 0.5s ease;
+        }
+
+        /* Responsive Design */
         @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header-content {
+                padding: 0 1rem;
+            }
+
             .stats-grid {
                 grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 1rem;
             }
+
+            .users-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .modal-content {
+                margin: 1rem;
+                width: calc(100% - 2rem);
+            }
+
+            .nav-tabs-container {
+                gap: 1rem;
+            }
+
+            .search-input {
+                max-width: none;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .user-stats {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+
+            .header-title {
+                font-size: 1.2rem;
+            }
+
+            .stat-number {
+                font-size: 2rem;
+            }
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Auto-refresh indicator */
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+        }
+
+        .refresh-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1>📊 体重記録ダッシュボード</h1>
-        <p>ユーザーの体重変化を可視化</p>
-    </header>
+    <!-- Authentication Screen -->
+    <div id="authScreen" class="auth-container">
+        <div class="auth-card fade-in">
+            <div class="auth-logo">🔐</div>
+            <h1 class="auth-title">ダッシュボードにログイン</h1>
+            <form id="authForm">
+                <div class="form-group">
+                    <label class="form-label" for="password">パスワード</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        class="form-input" 
+                        placeholder="管理者パスワードを入力"
+                        required
+                    >
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-sign-in-alt"></i>
+                    ログイン
+                </button>
+            </form>
+            <div id="authError" class="error" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                パスワードが正しくありません
+            </div>
+        </div>
+    </div>
 
-    <div class="container">
-        <button class="refresh-btn" onclick="loadDashboard()">🔄 データを更新</button>
+    <!-- Main Dashboard -->
+    <div id="dashboard" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-title">
+                    <i class="fas fa-chart-line"></i>
+                    体重記録ダッシュボード
+                </div>
+                <div class="header-actions">
+                    <div class="auto-refresh">
+                        <div class="refresh-dot"></div>
+                        自動更新中
+                    </div>
+                    <button class="theme-toggle" onclick="toggleTheme()">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button class="btn-icon" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number" id="totalUsers">-</div>
-                <div class="stat-label">総ユーザー数</div>
+        <!-- Navigation -->
+        <nav class="nav-tabs">
+            <div class="nav-tabs-container">
+                <div class="nav-tab active" onclick="showTab('overview')">
+                    <i class="fas fa-tachometer-alt"></i> 概要
+                </div>
+                <div class="nav-tab" onclick="showTab('users')">
+                    <i class="fas fa-users"></i> ユーザー管理
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number" id="activeUsers">-</div>
-                <div class="stat-label">アクティブユーザー</div>
+        </nav>
+
+        <!-- Overview Tab -->
+        <div id="overviewTab" class="container">
+            <div class="stats-grid">
+                <div class="stat-card fade-in">
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-number" id="totalUsers">-</div>
+                    <div class="stat-label">総ユーザー数</div>
+                </div>
+                <div class="stat-card fade-in">
+                    <div class="stat-icon">
+                        <i class="fas fa-user-check"></i>
+                    </div>
+                    <div class="stat-number" id="activeUsers">-</div>
+                    <div class="stat-label">アクティブユーザー</div>
+                </div>
+                <div class="stat-card fade-in">
+                    <div class="stat-icon">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div class="stat-number" id="usersRecordedToday">-</div>
+                    <div class="stat-label">今日記録したユーザー</div>
+                </div>
+                <div class="stat-card fade-in">
+                    <div class="stat-icon">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <div class="stat-number" id="totalRecords">-</div>
+                    <div class="stat-label">総記録数</div>
+                </div>
+                <div class="stat-card fade-in">
+                    <div class="stat-icon">
+                        <i class="fas fa-percentage"></i>
+                    </div>
+                    <div class="stat-number" id="averageProgress">-</div>
+                    <div class="stat-label">平均進捗率 (%)</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number" id="totalRecords">-</div>
-                <div class="stat-label">総記録数</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="avgWeight">-</div>
-                <div class="stat-label">平均体重 (kg)</div>
+
+            <div class="chart-container fade-in">
+                <div class="chart-title">
+                    <i class="fas fa-chart-line"></i>
+                    全体統計
+                </div>
+                <canvas id="overviewChart" width="400" height="200"></canvas>
             </div>
         </div>
 
-        <div class="chart-container">
-            <div class="chart-title">📈 全ユーザー体重推移</div>
-            <canvas id="weightChart" width="400" height="200"></canvas>
+        <!-- Users Tab -->
+        <div id="usersTab" class="container" style="display: none;">
+            <div class="search-container">
+                <div class="search-wrapper">
+                    <i class="fas fa-search search-icon"></i>
+                    <input 
+                        type="text" 
+                        id="userSearch" 
+                        class="search-input" 
+                        placeholder="ユーザー名で検索..."
+                        oninput="filterUsers()"
+                    >
+                </div>
+            </div>
+
+            <div id="usersGrid" class="users-grid">
+                <!-- User cards will be populated here -->
+            </div>
         </div>
 
-        <div class="chart-container">
-            <div class="chart-title">📊 BMI分布</div>
-            <canvas id="bmiChart" width="400" height="200"></canvas>
-        </div>
-
+        <!-- Loading State -->
         <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
             データを読み込んでいます...
         </div>
 
+        <!-- Error State -->
         <div id="error" class="error" style="display: none;">
-            データの読み込みに失敗しました。
+            <i class="fas fa-exclamation-triangle"></i>
+            データの読み込みに失敗しました
+        </div>
+    </div>
+
+    <!-- User Detail Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalUserName">ユーザー詳細</h2>
+                <button class="close-btn" onclick="closeUserModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="modalContent">
+                <!-- User details will be populated here -->
+            </div>
         </div>
     </div>
 
     <script>
-        let weightChart = null;
-        let bmiChart = null;
+        // Global variables
+        let currentToken = null;
+        let currentTab = 'overview';
+        let allUsers = [];
+        let autoRefreshInterval = null;
+        let overviewChart = null;
 
-        // ダッシュボードのデータを読み込み
-        async function loadDashboard() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('error').style.display = 'none';
+        // API Configuration
+        const API_BASE_URL = window.location.origin;
 
+        // Authentication
+        async function authenticate(password) {
             try {
-                // サンプルデータ（実際の実装では /api/dashboard エンドポイントからデータを取得）
-                const data = await generateSampleData();
-                
-                updateStats(data.stats);
-                updateWeightChart(data.weightData);
-                updateBMIChart(data.bmiData);
-                
+                const response = await fetch(`${API_BASE_URL}/api/auth`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password })
+                });
+
+                if (!response.ok) {
+                    throw new Error('認証に失敗しました');
+                }
+
+                const data = await response.json();
+                currentToken = data.token;
+                localStorage.setItem('dashboardToken', data.token);
+                localStorage.setItem('dashboardTokenExpiry', data.expiresAt);
+
+                return true;
             } catch (error) {
-                console.error('ダッシュボードの読み込みエラー:', error);
-                document.getElementById('error').style.display = 'block';
-            } finally {
-                document.getElementById('loading').style.display = 'none';
+                console.error('Authentication error:', error);
+                return false;
             }
         }
 
-        // 統計情報を更新
+        // Check if user is authenticated
+        function checkAuth() {
+            const token = localStorage.getItem('dashboardToken');
+            const expiry = localStorage.getItem('dashboardTokenExpiry');
+
+            if (!token || !expiry) {
+                return false;
+            }
+
+            if (new Date() > new Date(expiry)) {
+                localStorage.removeItem('dashboardToken');
+                localStorage.removeItem('dashboardTokenExpiry');
+                return false;
+            }
+
+            currentToken = token;
+            return true;
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('dashboardToken');
+            localStorage.removeItem('dashboardTokenExpiry');
+            currentToken = null;
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('authScreen').style.display = 'flex';
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        }
+
+        // API request helper
+        async function apiRequest(endpoint, options = {}) {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                ...options,
+                headers: {
+                    'Authorization': `Bearer ${currentToken}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+
+            if (response.status === 401) {
+                logout();
+                throw new Error('認証が必要です');
+            }
+
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+
+            return response.json();
+        }
+
+        // Load dashboard data
+        async function loadDashboard() {
+            if (!currentToken) return;
+
+            try {
+                showLoading(true);
+                hideError();
+
+                const [stats, users] = await Promise.all([
+                    apiRequest('/api/dashboard-stats'),
+                    apiRequest('/api/users')
+                ]);
+
+                allUsers = users.users;
+                updateStats(stats);
+                updateUsersGrid();
+                updateOverviewChart(stats);
+
+            } catch (error) {
+                console.error('Dashboard loading error:', error);
+                showError('データの読み込みに失敗しました: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Update statistics
         function updateStats(stats) {
             document.getElementById('totalUsers').textContent = stats.totalUsers;
             document.getElementById('activeUsers').textContent = stats.activeUsers;
+            document.getElementById('usersRecordedToday').textContent = stats.usersRecordedToday;
             document.getElementById('totalRecords').textContent = stats.totalRecords;
-            document.getElementById('avgWeight').textContent = stats.avgWeight + ' kg';
+            document.getElementById('averageProgress').textContent = stats.averageProgress + '%';
         }
 
-        // 体重推移チャートを更新
-        function updateWeightChart(data) {
-            const ctx = document.getElementById('weightChart').getContext('2d');
-            
-            if (weightChart) {
-                weightChart.destroy();
-            }
+        // Update users grid
+        function updateUsersGrid() {
+            const grid = document.getElementById('usersGrid');
+            grid.innerHTML = '';
 
-            weightChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.labels,
-                    datasets: data.datasets
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            title: {
-                                display: true,
-                                text: '体重 (kg)'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: '日付'
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    }
-                }
+            allUsers.forEach(user => {
+                const card = createUserCard(user);
+                grid.appendChild(card);
             });
         }
 
-        // BMI分布チャートを更新
-        function updateBMIChart(data) {
-            const ctx = document.getElementById('bmiChart').getContext('2d');
+        // Create user card
+        function createUserCard(user) {
+            const card = document.createElement('div');
+            card.className = 'user-card fade-in';
+            card.onclick = () => showUserDetail(user.userId);
+
+            const lastRecordDate = user.lastRecord ? new Date(user.lastRecord.replace(/\//g, '-')).toLocaleDateString('ja-JP') : '記録なし';
+
+            card.innerHTML = `
+                <div class="user-header">
+                    <div class="user-name">${user.name || 'ユーザー'}</div>
+                    <div class="user-streak">${user.streak}日連続</div>
+                </div>
+                <div class="user-stats">
+                    <div class="user-stat">
+                        <div class="user-stat-value">${user.currentWeight}kg</div>
+                        <div class="user-stat-label">現在体重</div>
+                    </div>
+                    <div class="user-stat">
+                        <div class="user-stat-value">${user.goalWeight}kg</div>
+                        <div class="user-stat-label">目標体重</div>
+                    </div>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-label">
+                        <span>進捗</span>
+                        <span>${user.progress}%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${user.progress}%"></div>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary);">
+                    最終記録: ${lastRecordDate}
+                </div>
+            `;
+
+            return card;
+        }
+
+        // Show user detail modal
+        async function showUserDetail(userId) {
+            try {
+                showLoading(true);
+                const userDetail = await apiRequest(`/api/users/${userId}`);
+                
+                document.getElementById('modalUserName').textContent = userDetail.name || 'ユーザー';
+                
+                const modalContent = document.getElementById('modalContent');
+                modalContent.innerHTML = `
+                    <div class="user-stats" style="margin-bottom: 2rem;">
+                        <div class="user-stat">
+                            <div class="user-stat-value">${userDetail.currentWeight}kg</div>
+                            <div class="user-stat-label">現在体重</div>
+                        </div>
+                        <div class="user-stat">
+                            <div class="user-stat-value">${userDetail.goalWeight}kg</div>
+                            <div class="user-stat-label">目標体重</div>
+                        </div>
+                        <div class="user-stat">
+                            <div class="user-stat-value">${userDetail.height}cm</div>
+                            <div class="user-stat-label">身長</div>
+                        </div>
+                        <div class="user-stat">
+                            <div class="user-stat-value">${userDetail.streak}日</div>
+                            <div class="user-stat-label">連続記録</div>
+                        </div>
+                    </div>
+                    
+                    <div class="progress-container" style="margin-bottom: 2rem;">
+                        <div class="progress-label">
+                            <span>目標達成度</span>
+                            <span>${userDetail.progress}%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${userDetail.progress}%"></div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-bottom: 1rem;">統計情報</h3>
+                    <div class="user-stats" style="margin-bottom: 2rem;">
+                        <div class="user-stat">
+                            <div class="user-stat-value">${userDetail.statistics.weeklyAverage || '-'}kg</div>
+                            <div class="user-stat-label">週平均</div>
+                        </div>
+                        <div class="user-stat">
+                            <div class="user-stat-value">${userDetail.statistics.monthlyAverage || '-'}kg</div>
+                            <div class="user-stat-label">月平均</div>
+                        </div>
+                        <div class="user-stat">
+                            <div class="user-stat-value">${userDetail.statistics.totalRecords}</div>
+                            <div class="user-stat-label">総記録数</div>
+                        </div>
+                        <div class="user-stat">
+                            <div class="user-stat-value">${userDetail.statistics.weightChange > 0 ? '+' : ''}${userDetail.statistics.weightChange}kg</div>
+                            <div class="user-stat-label">体重変化</div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-bottom: 1rem;">最近の記録</h3>
+                    <div style="background: var(--background); padding: 1rem; border-radius: 10px;">
+                        ${userDetail.recentHistory.length > 0 ? 
+                            userDetail.recentHistory.map(record => `
+                                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color);">
+                                    <span>${record.date}</span>
+                                    <span>${record.weight}kg</span>
+                                </div>
+                            `).join('') : 
+                            '<div style="text-align: center; color: var(--text-secondary);">記録がありません</div>'
+                        }
+                    </div>
+                `;
+
+                document.getElementById('userModal').classList.add('active');
+                
+            } catch (error) {
+                console.error('User detail loading error:', error);
+                showError('ユーザー詳細の読み込みに失敗しました');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Close user modal
+        function closeUserModal() {
+            document.getElementById('userModal').classList.remove('active');
+        }
+
+        // Filter users
+        function filterUsers() {
+            const searchTerm = document.getElementById('userSearch').value.toLowerCase();
+            const filteredUsers = allUsers.filter(user => 
+                (user.name || '').toLowerCase().includes(searchTerm)
+            );
             
-            if (bmiChart) {
-                bmiChart.destroy();
+            const grid = document.getElementById('usersGrid');
+            grid.innerHTML = '';
+            
+            filteredUsers.forEach(user => {
+                const card = createUserCard(user);
+                grid.appendChild(card);
+            });
+        }
+
+        // Tab navigation
+        function showTab(tabName) {
+            // Update nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update content
+            document.getElementById('overviewTab').style.display = tabName === 'overview' ? 'block' : 'none';
+            document.getElementById('usersTab').style.display = tabName === 'users' ? 'block' : 'none';
+
+            currentTab = tabName;
+        }
+
+        // Update overview chart
+        function updateOverviewChart(stats) {
+            const ctx = document.getElementById('overviewChart').getContext('2d');
+            
+            if (overviewChart) {
+                overviewChart.destroy();
             }
 
-            bmiChart = new Chart(ctx, {
+            overviewChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: data.labels,
+                    labels: ['アクティブユーザー', '非アクティブユーザー'],
                     datasets: [{
-                        data: data.values,
-                        backgroundColor: [
-                            '#3498db',
-                            '#2ecc71',
-                            '#f39c12',
-                            '#e74c3c',
-                            '#9b59b6'
-                        ]
+                        data: [stats.activeUsers, stats.totalUsers - stats.activeUsers],
+                        backgroundColor: ['#2ecc71', '#e74c3c'],
+                        borderWidth: 0
                     }]
                 },
                 options: {
@@ -264,47 +1103,79 @@
             });
         }
 
-        // サンプルデータ生成（実際の実装では削除）
-        async function generateSampleData() {
-            // 体重推移のサンプルデータ
-            const weightLabels = [];
-            const weightValues = [];
-            const today = new Date();
+        // Theme toggle
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             
-            for (let i = 29; i >= 0; i--) {
-                const date = new Date(today);
-                date.setDate(date.getDate() - i);
-                weightLabels.push(date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' }));
-                weightValues.push(65 + Math.random() * 10 - 5);
-            }
-
-            return {
-                stats: {
-                    totalUsers: 25,
-                    activeUsers: 18,
-                    totalRecords: 450,
-                    avgWeight: 65.8
-                },
-                weightData: {
-                    labels: weightLabels,
-                    datasets: [{
-                        label: '平均体重',
-                        data: weightValues,
-                        borderColor: '#667eea',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                bmiData: {
-                    labels: ['低体重', '普通体重', '肥満1度', '肥満2度', '肥満3度'],
-                    values: [2, 15, 6, 2, 0]
-                }
-            };
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            
+            const icon = document.querySelector('.theme-toggle i');
+            icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         }
 
-        // ページ読み込み時にダッシュボードを初期化
-        document.addEventListener('DOMContentLoaded', loadDashboard);
+        // Utility functions
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'flex' : 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'flex';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        // Event listeners
+        document.getElementById('authForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('password').value;
+            
+            const success = await authenticate(password);
+            if (success) {
+                document.getElementById('authScreen').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                await loadDashboard();
+                
+                // Start auto-refresh
+                autoRefreshInterval = setInterval(loadDashboard, 30000);
+            } else {
+                document.getElementById('authError').style.display = 'flex';
+            }
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('userModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('userModal')) {
+                closeUserModal();
+            }
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load theme preference
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            const icon = document.querySelector('.theme-toggle i');
+            icon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+
+            // Check authentication
+            if (checkAuth()) {
+                document.getElementById('authScreen').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                loadDashboard();
+                
+                // Start auto-refresh
+                autoRefreshInterval = setInterval(loadDashboard, 30000);
+            } else {
+                document.getElementById('authScreen').style.display = 'flex';
+                document.getElementById('dashboard').style.display = 'none';
+            }
+        });
     </script>
 </body>
 </html>

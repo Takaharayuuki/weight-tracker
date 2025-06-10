@@ -17,7 +17,7 @@ class User {
     this.lastRecordDate = null;
     this.name = null;
     // 段階的登録用
-    this.registrationStep = 0; // 0: 未開始, 1: 目標体重, 2: 現在体重, 3: 身長, 4: 起床時間
+    this.registrationStep = 0; // 0: 未開始, 1: 名前, 2: 目標体重, 3: 現在体重, 4: 身長, 5: 起床時間
   }
 }
 

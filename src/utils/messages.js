@@ -6,17 +6,19 @@ function getWelcomeMessage() {
     type: 'text',
     text: `体重記録Botです📊
 
-目標体重を入力してください。
-例: 65`
+まずはお名前を教えてください。
+例: 田中`
   };
 }
 
 // おはようメッセージ
 function getMorningMessage(userName = '') {
+  const namePrefix = userName ? `${userName}さん、` : '';
+  
   const greetings = [
-    '☀️ おはようございます！',
-    '🌅 おはようございます！今日も素敵な一日を！',
-    '🌞 おはようございます！新しい一日の始まりです！'
+    `☀️ ${namePrefix}おはようございます！`,
+    `🌅 ${namePrefix}おはようございます！今日も素敵な一日を！`,
+    `🌞 ${namePrefix}おはようございます！新しい一日の始まりです！`
   ];
   
   const prompts = [
@@ -125,7 +127,16 @@ function getTipMessage() {
 // 段階的登録用メッセージ
 function getRegistrationStepMessage(step, data = {}) {
   switch (step) {
-    case 1: // 現在の体重
+    case 1: // 目標体重
+      return {
+        type: 'text',
+        text: `${data.name}さん、よろしくお願いします！
+
+目標体重を入力してください。
+例: 65`
+      };
+
+    case 2: // 現在の体重
       return {
         type: 'text',
         text: `目標体重: ${data.goalWeight}kg
@@ -134,7 +145,7 @@ function getRegistrationStepMessage(step, data = {}) {
 例: 70`
       };
 
-    case 2: // 身長
+    case 3: // 身長
       return {
         type: 'text',
         text: `現在の体重: ${data.currentWeight}kg
@@ -143,7 +154,7 @@ function getRegistrationStepMessage(step, data = {}) {
 例: 170`
       };
 
-    case 3: // 起床時間
+    case 4: // 起床時間
       return {
         type: 'text',
         text: `身長: ${data.height}cm
@@ -157,6 +168,14 @@ function getRegistrationStepMessage(step, data = {}) {
   }
 }
 
+// 名前設定完了メッセージ
+function getNameSetMessage(name) {
+  return {
+    type: 'text',
+    text: `${name}さんですね！\n名前を設定しました。`
+  };
+}
+
 module.exports = {
   getWelcomeMessage,
   getMorningMessage,
@@ -164,5 +183,6 @@ module.exports = {
   getErrorMessage,
   getProgressReport,
   getTipMessage,
-  getRegistrationStepMessage
+  getRegistrationStepMessage,
+  getNameSetMessage
 };

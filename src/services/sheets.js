@@ -131,19 +131,275 @@ async function initialize() {
   return sheets;
 }
 
-// 体重データを追加
-async function appendWeight(userId, weight) {
-  console.log(`Google Sheetsに体重データを記録開始: ${userId} - ${weight}kg`);
+// シート名の自動検出（日本語対応）
+async function getMainSheetName() {
+  try {
+    await initialize();
+    
+    const response = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID
+    });
+    
+    const sheetNames = response.data.sheets.map(sheet => sheet.properties.title);
+    console.log('利用可能なシート名:', sheetNames);
+    
+    // 優先順位: 「シート1」 > 「Sheet1」 > 最初のシート
+    if (sheetNames.includes('シート1')) {
+      return 'シート1';
+    } else if (sheetNames.includes('Sheet1')) {
+      return 'Sheet1';
+    } else {
+      return sheetNames[0];
+    }
+  } catch (error) {
+    console.error('シート名取得エラー:', error);
+    return 'Sheet1'; // デフォルト
+  }
+}
+
+// ユーザー管理シートの存在確認と作成
+async function ensureUserManagementSheet() {
+  try {
+    await initialize();
+    
+    const response = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID
+    });
+    
+    const sheetNames = response.data.sheets.map(sheet => sheet.properties.title);
+    
+    if (!sheetNames.includes('ユーザー管理')) {
+      console.log('ユーザー管理シートを作成中...');
+      
+      // シートを追加
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: 'ユーザー管理'
+                }
+              }
+            }
+          ]
+        }
+      });
+      
+      // ヘッダー行を追加
+      const headers = [['ユーザーID', '名前', '目標体重', '現在体重', '身長', '起床時間', '登録日', '最終記録日', '連続記録日数']];
+      
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'ユーザー管理!A1:I1',
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: headers }
+      });
+      
+      console.log('ユーザー管理シートを作成しました');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('ユーザー管理シート確認エラー:', error);
+    return false;
+  }
+}
+
+// ユーザー情報を保存/更新
+async function saveUserInfo(userId, userInfo) {
+  console.log(`ユーザー情報をGoogle Sheetsに保存: ${userId}`);
   
   try {
     await initialize();
+    await ensureUserManagementSheet();
+    
+    // 既存のユーザー情報を確認
+    const existingUser = await getUserInfo(userId);
+    const now = new Date();
+    const jstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const dateStr = jstDate.toISOString().split('T')[0].replace(/-/g, '/');
+    
+    const values = [[
+      userId,
+      userInfo.name || '',
+      userInfo.goalWeight || '',
+      userInfo.currentWeight || '',
+      userInfo.height || '',
+      userInfo.wakeTime || '',
+      existingUser ? existingUser.registrationDate : dateStr, // 登録日は既存のものを保持
+      userInfo.lastRecordDate || '',
+      userInfo.consecutiveDays || 0
+    ]];
+    
+    if (existingUser) {
+      // 既存ユーザーの更新
+      const rowIndex = existingUser.rowIndex;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `ユーザー管理!A${rowIndex}:I${rowIndex}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values }
+      });
+      console.log(`ユーザー情報を更新しました: ${userId}`);
+    } else {
+      // 新規ユーザーの追加
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'ユーザー管理!A:I',
+        valueInputOption: 'USER_ENTERED',
+        resource: { values }
+      });
+      console.log(`新規ユーザー情報を保存しました: ${userId}`);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('ユーザー情報保存エラー:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ユーザー情報を取得
+async function getUserInfo(userId) {
+  try {
+    await initialize();
+    
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'ユーザー管理!A:I',
+    });
+    
+    const rows = result.data.values || [];
+    
+    for (let i = 1; i < rows.length; i++) { // ヘッダー行をスキップ
+      const row = rows[i];
+      if (row[0] === userId) {
+        return {
+          userId: row[0],
+          name: row[1] || '',
+          goalWeight: row[2] ? parseFloat(row[2]) : null,
+          currentWeight: row[3] ? parseFloat(row[3]) : null,
+          height: row[4] ? parseFloat(row[4]) : null,
+          wakeTime: row[5] || '',
+          registrationDate: row[6] || '',
+          lastRecordDate: row[7] || '',
+          consecutiveDays: row[8] ? parseInt(row[8]) : 0,
+          rowIndex: i + 1 // スプレッドシートの行番号（1ベース）
+        };
+      }
+    }
+    
+    return null; // ユーザーが見つからない場合
+  } catch (error) {
+    console.error('ユーザー情報取得エラー:', error);
+    return null;
+  }
+}
+
+// 全ユーザー一覧を取得
+async function getAllUsers() {
+  try {
+    await initialize();
+    
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'ユーザー管理!A:I',
+    });
+    
+    const rows = result.data.values || [];
+    const users = [];
+    
+    for (let i = 1; i < rows.length; i++) { // ヘッダー行をスキップ
+      const row = rows[i];
+      if (row[0]) { // ユーザーIDが存在する場合
+        users.push({
+          userId: row[0],
+          name: row[1] || '',
+          goalWeight: row[2] ? parseFloat(row[2]) : null,
+          currentWeight: row[3] ? parseFloat(row[3]) : null,
+          height: row[4] ? parseFloat(row[4]) : null,
+          wakeTime: row[5] || '',
+          registrationDate: row[6] || '',
+          lastRecordDate: row[7] || '',
+          consecutiveDays: row[8] ? parseInt(row[8]) : 0
+        });
+      }
+    }
+    
+    return users;
+  } catch (error) {
+    console.error('全ユーザー取得エラー:', error);
+    return [];
+  }
+}
+
+// 名前のみ更新
+async function updateUserName(userId, name) {
+  console.log(`ユーザー名を更新: ${userId} -> ${name}`);
+  
+  try {
+    const userInfo = await getUserInfo(userId);
+    if (!userInfo) {
+      console.log('ユーザーが見つからないため、名前のみで新規作成');
+      return await saveUserInfo(userId, { name });
+    }
+    
+    // 既存情報に名前を更新
+    userInfo.name = name;
+    return await saveUserInfo(userId, userInfo);
+  } catch (error) {
+    console.error('ユーザー名更新エラー:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// 連続記録日数を計算
+function calculateConsecutiveDays(weightHistory) {
+  if (!weightHistory || weightHistory.length === 0) {
+    return 0;
+  }
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // 日付でグループ化
+  const recordDates = [...new Set(weightHistory.map(record => {
+    const recordDate = new Date(record.date.replace(/\//g, '-'));
+    recordDate.setHours(0, 0, 0, 0);
+    return recordDate.getTime();
+  }))].sort((a, b) => b - a); // 降順ソート
+  
+  let consecutiveDays = 0;
+  let currentDate = today.getTime();
+  
+  for (const recordDate of recordDates) {
+    if (recordDate === currentDate || recordDate === currentDate - 24 * 60 * 60 * 1000) {
+      consecutiveDays++;
+      currentDate = recordDate - 24 * 60 * 60 * 1000; // 前日にセット
+    } else {
+      break;
+    }
+  }
+  
+  return consecutiveDays;
+}
+
+// 体重データを追加（ニックネーム付き）
+async function appendWeight(userId, weight, userName = '') {
+  console.log(`Google Sheetsに体重データを記録開始: ${userId} - ${weight}kg (${userName})`);
+  
+  try {
+    await initialize();
+    const mainSheetName = await getMainSheetName();
     
     const now = new Date();
     const jstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000); // JSTに変換
     const dateStr = jstDate.toISOString().split('T')[0].replace(/-/g, '/');
     const timeStr = jstDate.toISOString().split('T')[1].split('.')[0];
     
-    const values = [[dateStr, timeStr, userId, weight]];
+    const values = [[dateStr, timeStr, userId, weight, userName || '']];
     
     const resource = {
       values,
@@ -153,7 +409,7 @@ async function appendWeight(userId, weight) {
     const result = await Promise.race([
       sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: 'Sheet1!A:D',
+        range: `${mainSheetName}!A:E`,
         valueInputOption: 'USER_ENTERED',
         resource,
       }),
@@ -162,7 +418,27 @@ async function appendWeight(userId, weight) {
       )
     ]);
     
-    console.log(`体重データを記録しました: ${userId} - ${weight}kg`);
+    // ユーザー管理シートの更新
+    try {
+      const weightHistory = await getUserWeightHistory(userId, 30); // 30日分の履歴を取得
+      const consecutiveDays = calculateConsecutiveDays(weightHistory);
+      
+      const userInfo = await getUserInfo(userId);
+      if (userInfo) {
+        userInfo.currentWeight = weight;
+        userInfo.lastRecordDate = dateStr;
+        userInfo.consecutiveDays = consecutiveDays;
+        if (userName && !userInfo.name) {
+          userInfo.name = userName;
+        }
+        await saveUserInfo(userId, userInfo);
+      }
+    } catch (userUpdateError) {
+      console.error('ユーザー管理シート更新エラー:', userUpdateError);
+      // 体重記録は成功しているので、エラーを投げない
+    }
+    
+    console.log(`体重データを記録しました: ${userId} - ${weight}kg (${userName})`);
     return result;
   } catch (error) {
     console.error('Google Sheetsへの記録エラー:', error);
@@ -186,10 +462,11 @@ async function appendWeight(userId, weight) {
 async function getUserWeightHistory(userId, days = 7) {
   try {
     await initialize();
+    const mainSheetName = await getMainSheetName();
     
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'Sheet1!A:D',
+      range: `${mainSheetName}!A:E`,
     });
     
     const rows = result.data.values || [];
@@ -201,7 +478,8 @@ async function getUserWeightHistory(userId, days = 7) {
     return recentRows.map(row => ({
       date: row[0],
       time: row[1],
-      weight: parseFloat(row[3])
+      weight: parseFloat(row[3]),
+      name: row[4] || ''
     }));
   } catch (error) {
     console.error('Google Sheetsからの読み取りエラー:', error);
@@ -214,10 +492,11 @@ async function getUserWeightHistory(userId, days = 7) {
 async function getAllUsersData() {
   try {
     await initialize();
+    const mainSheetName = await getMainSheetName();
     
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'Sheet1!A:D',
+      range: `${mainSheetName}!A:E`,
     });
     
     const rows = result.data.values || [];
@@ -231,7 +510,8 @@ async function getAllUsersData() {
         const record = {
           date: row[0],
           time: row[1],
-          weight: parseFloat(row[3])
+          weight: parseFloat(row[3]),
+          name: row[4] || ''
         };
         
         if (!userData[userId]) {
@@ -252,12 +532,13 @@ async function getAllUsersData() {
 async function initializeSheet() {
   try {
     await initialize();
+    const mainSheetName = await getMainSheetName();
     
-    const headers = [['日付', '時刻', 'ユーザーID', '体重(kg)']];
+    const headers = [['日付', '時刻', 'ユーザーID', '体重(kg)', 'ニックネーム']];
     
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'Sheet1!A1:D1',
+      range: `${mainSheetName}!A1:E1`,
       valueInputOption: 'USER_ENTERED',
       resource: { values: headers }
     });
@@ -272,5 +553,11 @@ module.exports = {
   appendWeight,
   getUserWeightHistory,
   getAllUsersData,
-  initializeSheet
+  initializeSheet,
+  saveUserInfo,
+  getUserInfo,
+  getAllUsers,
+  updateUserName,
+  ensureUserManagementSheet,
+  getMainSheetName
 };
