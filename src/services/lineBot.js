@@ -18,22 +18,45 @@ async function handleEvent(event) {
     // 既存ユーザーかチェック
     let user = userStore.getUser(userId);
     if (!user) {
-      // 新規ユーザーを作成
-      userStore.createUser(userId);
-      userStore.updateUser(userId, { registrationStep: 1 });
-      
-      return client.replyMessage(event.replyToken, messages.getWelcomeMessage());
+      try {
+        // LINEプロフィール情報を取得
+        const profile = await client.getProfile(userId);
+        const displayName = profile.displayName;
+        console.log(`LINEプロフィール取得: ${displayName}`);
+        
+        // 新規ユーザーを作成し、LINEの表示名を設定
+        userStore.createUser(userId);
+        userStore.updateUser(userId, { 
+          name: displayName,
+          registrationStep: 2  // 名前入力をスキップして目標体重から開始
+        });
+        
+        return client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `${displayName}さん、はじめまして！💪\n\n` +
+                `パーソナルトレーナーBotです。\n` +
+                `一緒に理想の体を目指しましょう！\n\n` +
+                `まず、目標体重を教えてください🎯\n（例: 65）`
+        });
+      } catch (error) {
+        console.error('LINEプロフィール取得エラー:', error);
+        // プロフィール取得に失敗した場合は従来の方式で名前入力から
+        userStore.createUser(userId);
+        userStore.updateUser(userId, { registrationStep: 1 });
+        
+        return client.replyMessage(event.replyToken, messages.getWelcomeMessage());
+      }
     } else {
       // 既存ユーザーの場合は現在の状況に応じたメッセージ
       if (!user.isCompleted) {
         return client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '再び友達登録ありがとうございます！\n\n登録の続きから始めましょう。'
+          text: `${user.name || 'ユーザー'}さん、お帰りなさい！😊\n\n登録の続きから始めましょう。`
         });
       } else {
         return client.replyMessage(event.replyToken, {
           type: 'text',
-          text: 'お帰りなさい！\n\n体重を数値で送信して記録しましょう。'
+          text: `${user.name || 'ユーザー'}さん、お帰りなさい！😊\n\n今日の体重を数値で送信してください。`
         });
       }
     }
@@ -57,9 +80,31 @@ async function handleEvent(event) {
     if (!user) {
       // 新規ユーザーの場合（友達登録していない場合）
       console.log('新規ユーザーの処理（メッセージから）');
-      userStore.createUser(userId);
-      userStore.updateUser(userId, { registrationStep: 1 });
-      return client.replyMessage(event.replyToken, messages.getWelcomeMessage());
+      try {
+        // LINEプロフィール情報を取得
+        const profile = await client.getProfile(userId);
+        const displayName = profile.displayName;
+        console.log(`LINEプロフィール取得: ${displayName}`);
+        
+        userStore.createUser(userId);
+        userStore.updateUser(userId, { 
+          name: displayName,
+          registrationStep: 2  // 名前入力をスキップ
+        });
+        
+        return client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `${displayName}さん、はじめまして！💪\n\n` +
+                `パーソナルトレーナーBotです。\n` +
+                `一緒に理想の体を目指しましょう！\n\n` +
+                `まず、目標体重を教えてください🎯\n（例: 65）`
+        });
+      } catch (error) {
+        console.error('LINEプロフィール取得エラー:', error);
+        userStore.createUser(userId);
+        userStore.updateUser(userId, { registrationStep: 1 });
+        return client.replyMessage(event.replyToken, messages.getWelcomeMessage());
+      }
     } else if (!user.isCompleted || user.registrationStep < 6) {
       // 登録途中のユーザー
       console.log('登録フローの処理');
@@ -177,7 +222,7 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
       if (messageText.length > 20) {
         return client.replyMessage(event.replyToken, {
           type: 'text',
-          text: 'お名前は20文字以内で入力してください。'
+          text: 'お名前は20文字以内でお願いします😊'
         });
       }
       
@@ -196,7 +241,7 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
       if (isNaN(value) || value < 30 || value > 200) {
         return client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '正しい目標体重を入力してください（30〜200kg）'
+          text: '目標体重は30〜200kgの範囲で入力してくださいね😊\n（例: 65）'
         });
       }
       
@@ -215,7 +260,7 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
       if (isNaN(value) || value < 30 || value > 300) {
         return client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '正しい現在の体重を入力してください（30〜300kg）'
+          text: '体重は30〜300kgの範囲で入力してくださいね😊\n（例: 70）'
         });
       }
       
@@ -232,7 +277,7 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
       if (isNaN(value) || value < 100 || value > 250) {
         return client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '正しい身長を入力してください（100〜250cm）'
+          text: '身長は100〜250cmの範囲で入力してくださいね😊\n（例: 170）'
         });
       }
       
@@ -250,7 +295,7 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
       if (!timePattern.test(messageText)) {
         return client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '正しい時間形式で入力してください（HH:MM）\n例: 6:30'
+          text: '時間はHH:MMの形式で入力してくださいね😊\n（例: 6:30）'
         });
       }
       
@@ -269,13 +314,18 @@ async function handleRegistrationFlow(event, userId, messageText, user) {
       const response = client.replyMessage(event.replyToken, [
         {
           type: 'text',
-          text: `${finalUser.name}さん、登録完了です！
+          text: `🎉 ${finalUser.name}さん、準備完了です！
 
-目標体重: ${finalUser.goalWeight}kg
-現在の体重: ${finalUser.currentWeight}kg
-身長: ${finalUser.height}cm
-起床時間: ${finalUser.wakeTime}
-BMI: ${bmi.toFixed(1)} (${bmiStatus})`
+一緒に頑張りましょう！💪
+
+【あなたの目標】
+🎯 目標体重: ${finalUser.goalWeight}kg
+📊 現在の体重: ${finalUser.currentWeight}kg
+📏 身長: ${finalUser.height}cm
+⏰ 起床時間: ${finalUser.wakeTime}
+📋 BMI: ${bmi.toFixed(1)} (${bmiStatus})
+
+毎日${finalUser.wakeTime}におはようメッセージをお送りしますね😊`
         },
         messages.getMotivationalMessage(finalUser.currentWeight, finalUser.goalWeight, true)
       ]);
@@ -314,7 +364,7 @@ async function handleWeightRecord(event, userId, messageText, user) {
     console.log('無効な体重値:', messageText);
     return client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '体重を数値で入力してください（例: 69.5）'
+      text: 'あれ？体重を数値で入力してみてください😊\n（例: 69.5）\n\n20〜300kgの範囲でお願いします。'
     });
   }
 
@@ -325,10 +375,29 @@ async function handleWeightRecord(event, userId, messageText, user) {
 
   // 先にユーザーに応答を返す（週平均計算は後で非同期実行）
   const userName = user.name || 'ユーザー';
+  
+  // 前回の体重と比較
+  const previousWeight = user.currentWeight;
+  const weightDiff = previousWeight ? weight - previousWeight : 0;
+  
+  let recordMessage = `${userName}さん、お疲れ様です！\n${weight}kg、しっかり記録しました📝`;
+  
+  if (previousWeight && weightDiff !== 0) {
+    const diffText = weightDiff > 0 ? `+${weightDiff.toFixed(1)}kg` : `${weightDiff.toFixed(1)}kg`;
+    const emoji = weightDiff < 0 ? '📉' : '📈';
+    recordMessage += `\n\n前回より${diffText} ${emoji}`;
+    
+    if (weightDiff < 0) {
+      recordMessage += '\nいい調子ですよ！';
+    } else if (weightDiff > 0) {
+      recordMessage += '\n体重は日々変動するもの。長期的な視点で見ましょう😊';
+    }
+  }
+  
   const response = client.replyMessage(event.replyToken, [
     {
       type: 'text',
-      text: `${userName}さん、${weight}kg記録しました`
+      text: recordMessage
     },
     messages.getMotivationalMessage(weight, user.goalWeight)
   ]);
@@ -349,7 +418,7 @@ async function handleWeightRecord(event, userId, messageText, user) {
     if (weeklyAverage) {
       client.pushMessage(userId, {
         type: 'text',
-        text: `週平均: ${weeklyAverage.toFixed(1)}kg`
+        text: `📊 今週の平均体重: ${weeklyAverage.toFixed(1)}kg\n\n継続が何より大切です！\n今日も記録してくれてありがとうございます✨`
       }).catch(error => {
         console.error('週平均メッセージ送信エラー:', error);
       });
