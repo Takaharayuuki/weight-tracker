@@ -140,6 +140,28 @@ weight-tracker-linebot/
 
 ## 🚀 デプロイ
 
+### 本番環境用のGoogle認証情報準備
+
+```bash
+# macOS/Linux: credentials.jsonをBase64エンコード
+base64 -i credentials.json
+
+# Windows (PowerShell)
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("credentials.json"))
+
+# 出力された文字列（改行なし）をGOOGLE_CREDENTIALS_BASE64環境変数に設定
+# ⚠️ 重要: 改行文字は含めないでください
+```
+
+**例**:
+```bash
+# エンコード例
+$ base64 -i credentials.json
+eyJ0eXBlIjoic2VydmljZV9hY2NvdW50IiwicHJvamVjdF9pZCI6Im15LXByb2plY3QiLCJwcml2YXRlX2tleV9pZCI6IjEyMzQ1NiIsInByaXZhdGVfa2V5IjoiLS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tXG5NSUlFdlFJQkFEQU5CZ2txaGtpRzl3MEJBUUVGQUFTQ0JLY3dnZ1NqQWdFQUFvSUJBUURCaXZNdjJtWi4uLlxuLS0tLS1FTkQgUFJJVkFURSBLRVktLS0tLVxuIiwiY2xpZW50X2VtYWlsIjoibXktc2VydmljZUBteS1wcm9qZWN0LmlhbS5nc2VydmljZWFjY291bnQuY29tIiwiY2xpZW50X2lkIjoiMTIzNDU2Nzg5MCIsImF1dGhfdXJpIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tL28vb2F1dGgyL2F1dGgiLCJ0b2tlbl91cmkiOiJodHRwczovL29hdXRoMi5nb29nbGVhcGlzLmNvbS90b2tlbiJ9
+
+# この文字列をコピーして環境変数に設定
+```
+
 ### Heroku
 
 ```bash
@@ -147,17 +169,42 @@ heroku create your-app-name
 heroku config:set LINE_CHANNEL_ACCESS_TOKEN=xxx
 heroku config:set LINE_CHANNEL_SECRET=xxx  
 heroku config:set GOOGLE_SHEET_ID=xxx
+heroku config:set GOOGLE_CREDENTIALS_BASE64="$(base64 -i credentials.json)"
 git push heroku main
 ```
+
+### Render.com
+
+1. **GitHubリポジトリをRender.comに接続**
+
+2. **Environment Variables設定**:
+   ```
+   LINE_CHANNEL_ACCESS_TOKEN=your_line_access_token
+   LINE_CHANNEL_SECRET=your_line_channel_secret
+   GOOGLE_SHEET_ID=your_spreadsheet_id
+   GOOGLE_CREDENTIALS_BASE64=your_base64_encoded_credentials
+   NODE_ENV=production
+   ```
+
+3. **Build & Start Commands**:
+   ```
+   Build Command: npm install
+   Start Command: npm start
+   ```
 
 ### Google Cloud Run
 
 ```bash
+# 環境変数を設定してデプロイ
 gcloud run deploy weight-tracking-bot \
   --source . \
   --platform managed \
   --region asia-northeast1 \
-  --allow-unauthenticated
+  --allow-unauthenticated \
+  --set-env-vars LINE_CHANNEL_ACCESS_TOKEN=xxx \
+  --set-env-vars LINE_CHANNEL_SECRET=xxx \
+  --set-env-vars GOOGLE_SHEET_ID=xxx \
+  --set-env-vars GOOGLE_CREDENTIALS_BASE64="$(base64 -i credentials.json)"
 ```
 
 ## 🧪 テスト
