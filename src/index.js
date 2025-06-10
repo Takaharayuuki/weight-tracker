@@ -111,12 +111,27 @@ app.get('/api/users', requireAuth, async (req, res) => {
           // Google Sheetsからユーザー管理情報を取得
           const sheetUserInfo = await sheets.getUserInfo(userId);
           
-          // 進捗計算
-          const weightDiff = user.goalWeight - user.currentWeight;
-          const totalTarget = user.goalWeight - (sheetUserInfo?.currentWeight || user.currentWeight);
-          const progress = totalTarget === 0 ? 100 : Math.max(0, Math.min(100, 
-            ((totalTarget - weightDiff) / totalTarget) * 100
-          ));
+          // 進捗計算（正しいロジック）
+          const initialWeight = sheetUserInfo?.currentWeight || user.currentWeight;
+          const currentWeight = user.currentWeight;
+          const goalWeight = user.goalWeight;
+          
+          let progress = 0;
+          if (initialWeight === goalWeight) {
+            progress = 100; // 既に目標達成
+          } else {
+            const totalTarget = Math.abs(goalWeight - initialWeight);
+            const achieved = Math.abs(currentWeight - initialWeight);
+            
+            if ((initialWeight > goalWeight && currentWeight <= goalWeight) || 
+                (initialWeight < goalWeight && currentWeight >= goalWeight)) {
+              progress = 100; // 目標達成または超過
+            } else if ((initialWeight > goalWeight && currentWeight < initialWeight) ||
+                       (initialWeight < goalWeight && currentWeight > initialWeight)) {
+              progress = Math.min(100, (achieved / totalTarget) * 100);
+            }
+          }
+          progress = Math.max(0, Math.round(progress));
           
           users.push({
             userId: userId,
@@ -179,13 +194,27 @@ app.get('/api/users/:userId', requireAuth, async (req, res) => {
     const weeklyAverage = await calculations.getWeeklyAverage(userId);
     const monthlyAverage = await calculations.getMonthlyAverage(userId);
     
-    // 進捗計算（日別最新記録を使用）
-    const weightDiff = user.goalWeight - user.currentWeight;
+    // 進捗計算（日別最新記録を使用、正しいロジック）
     const initialWeight = weightHistory.length > 0 ? weightHistory[0].weight : user.currentWeight;
-    const totalTarget = user.goalWeight - initialWeight;
-    const progress = totalTarget === 0 ? 100 : Math.max(0, Math.min(100, 
-      ((totalTarget - weightDiff) / totalTarget) * 100
-    ));
+    const currentWeight = user.currentWeight;
+    const goalWeight = user.goalWeight;
+    
+    let progress = 0;
+    if (initialWeight === goalWeight) {
+      progress = 100; // 既に目標達成
+    } else {
+      const totalTarget = Math.abs(goalWeight - initialWeight);
+      const achieved = Math.abs(currentWeight - initialWeight);
+      
+      if ((initialWeight > goalWeight && currentWeight <= goalWeight) || 
+          (initialWeight < goalWeight && currentWeight >= goalWeight)) {
+        progress = 100; // 目標達成または超過
+      } else if ((initialWeight > goalWeight && currentWeight < initialWeight) ||
+                 (initialWeight < goalWeight && currentWeight > initialWeight)) {
+        progress = Math.min(100, (achieved / totalTarget) * 100);
+      }
+    }
+    progress = Math.max(0, Math.round(progress));
     
     const userDetail = {
       userId: userId,
@@ -257,13 +286,27 @@ app.get('/api/dashboard-stats', requireAuth, async (req, res) => {
           }
         }
         
-        // 進捗計算
-        const weightDiff = user.goalWeight - user.currentWeight;
+        // 進捗計算（正しいロジック）
         const initialWeight = user.currentWeight; // 簡易計算
-        const targetDiff = user.goalWeight - initialWeight;
-        const progress = targetDiff === 0 ? 100 : Math.max(0, Math.min(100, 
-          ((targetDiff - weightDiff) / targetDiff) * 100
-        ));
+        const currentWeight = user.currentWeight;
+        const goalWeight = user.goalWeight;
+        
+        let progress = 0;
+        if (initialWeight === goalWeight) {
+          progress = 100; // 既に目標達成
+        } else {
+          const totalTarget = Math.abs(goalWeight - initialWeight);
+          const achieved = Math.abs(currentWeight - initialWeight);
+          
+          if ((initialWeight > goalWeight && currentWeight <= goalWeight) || 
+              (initialWeight < goalWeight && currentWeight >= goalWeight)) {
+            progress = 100; // 目標達成または超過
+          } else if ((initialWeight > goalWeight && currentWeight < initialWeight) ||
+                     (initialWeight < goalWeight && currentWeight > initialWeight)) {
+            progress = Math.min(100, (achieved / totalTarget) * 100);
+          }
+        }
+        progress = Math.max(0, Math.round(progress));
         totalProgress += progress;
         
       } catch (userError) {

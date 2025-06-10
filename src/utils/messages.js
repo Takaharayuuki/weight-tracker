@@ -41,27 +41,71 @@ function getMorningMessage(userName = '') {
 
 // 応援メッセージ
 function getMotivationalMessage(currentWeight, goalWeight, isInitialRegistration = false) {
-  // 初回登録時は専用メッセージ
+  const difference = currentWeight - goalWeight; // 現在 - 目標
+  
+  // デバッグログを追加
+  console.log('目標判定:', {
+    currentWeight,
+    goalWeight,
+    difference: difference,
+    isReduction: difference > 0,
+    isIncrease: difference < 0,
+    isAchieved: difference === 0
+  });
+  
+  // 初回登録時は専用メッセージ（目標の種類を判断）
   if (isInitialRegistration) {
-    return {
-      type: 'text',
-      text: '目標に向かって頑張りましょう💪\n毎日の記録が成功への第一歩です！'
-    };
+    if (Math.abs(difference) > 20) {
+      // 20kg以上の大きな差がある場合
+      const changeAmount = Math.abs(difference).toFixed(1);
+      const changeType = difference > 0 ? '減量' : '増量';
+      return {
+        type: 'text',
+        text: `${changeAmount}kg${changeType}の大きな目標ですね！💪\n\n一歩ずつ確実に進めば必ず達成できます。\n私が全力でサポートしますので、\n一緒に頑張りましょう✨`
+      };
+    } else if (difference > 10) {
+      return {
+        type: 'text',
+        text: `${difference.toFixed(1)}kg減量の目標ですね！💪\n\n一緒に目標に向かって頑張りましょう！\n小さな一歩の積み重ねが、\n大きな変化につながります✨`
+      };
+    } else if (difference > 0) {
+      return {
+        type: 'text',
+        text: `目標まで${difference.toFixed(1)}kg！\n一緒に達成しましょう💪\n\n毎日の記録が成功への第一歩です✨`
+      };
+    } else if (difference < -10) {
+      return {
+        type: 'text',
+        text: `${Math.abs(difference).toFixed(1)}kg増量の目標ですね！💪\n\n健康的に体重を増やしていきましょう。\n一緒に頑張ります✨`
+      };
+    } else if (difference < 0) {
+      return {
+        type: 'text',
+        text: `目標まで${Math.abs(difference).toFixed(1)}kg増量！💪\n\n健康的に理想の体重を目指しましょう✨`
+      };
+    } else {
+      return {
+        type: 'text',
+        text: '現在の体重をキープする目標ですね！💪\n\n理想的な状態を維持していきましょう✨'
+      };
+    }
   }
   
-  const difference = currentWeight - goalWeight;
+  // 日々の記録時のメッセージ
   let message;
   
   if (difference > 10) {
-    message = '一歩ずつ確実に進みましょう💪\n継続は力なり！';
+    message = `目標まで${difference.toFixed(1)}kg！\n焦らず慌てず、一歩ずつ進みましょう💪\n\n継続することで必ず結果はついてきます！\n私がサポートしますので安心してくださいね😊`;
   } else if (difference > 5) {
-    message = '順調に近づいています🎯\nこの調子で頑張りましょう！';
+    message = `目標まで${difference.toFixed(1)}kg！\n素晴らしい！順調に目標に近づいています🎯\n\nこの調子で頂きまで一緒に進みましょう！\nあなたなら絶対にできます✨`;
   } else if (difference > 0) {
-    message = 'もう少しです✨\n目標まであと一息！';
+    message = `目標まであと${difference.toFixed(1)}kg！\nすごいです！もう少しで目標達成です✨\n\n最後の一踏ん張り、一緒に頑張りましょう！\nご自分を誇りに思ってください😊`;
   } else if (difference === 0) {
-    message = 'おめでとうございます！目標達成です🎉\n素晴らしい成果です！';
+    message = 'おめでとうございます！🎉\n目標体重達成です！！\n\n継続した努力が実を結びましたね✨\n本当に素晴らしいです！';
+  } else if (difference > -5) {
+    message = `目標まで${Math.abs(difference).toFixed(1)}kg増量！\n健康的に体重を増やしていきましょう💪\n\nしっかり栄養を摂って理想の体を目指しましょう✨`;
   } else {
-    message = '目標を達成されています！👏\nこの状態をキープしましょう！';
+    message = `目標まで${Math.abs(difference).toFixed(1)}kg増量！\n健康的に体重を増やす目標ですね💪\n\n焦らずゆっくりと理想の体重を目指しましょう✨`;
   }
   
   return {
@@ -198,10 +242,24 @@ function getRegistrationStepMessage(step, data = {}) {
       };
 
     case 3: // 身長
+      const weightDiff = data.currentWeight - data.goalWeight; // 現在 - 目標
+      let encouragement;
+      
+      if (weightDiff > 0) {
+        // 減量が必要
+        encouragement = `${weightDiff.toFixed(1)}kg減量、一緒に達成しましょう！💪`;
+      } else if (weightDiff < 0) {
+        // 増量が必要
+        encouragement = `${Math.abs(weightDiff).toFixed(1)}kg増量、健康的に目指しましょう！💪`;
+      } else {
+        // 目標と同じ
+        encouragement = `目標体重と同じですね！現状維持を目指しましょう！💪`;
+      }
+      
       return {
         type: 'text',
         text: `${data.currentWeight}kgですね。
-${data.goalWeight - data.currentWeight >= 0 ? `${Math.abs(data.goalWeight - data.currentWeight)}kg減、一緒に達成しましょう！` : `目標体重より軽いですね。現状維持を目指しましょう！`}
+${encouragement}
 
 身長を教えてください📏
 （例: 170）`
