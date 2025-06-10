@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(npm run dev:*)",
-      "Bash(PORT=3001 npm run dev)"
+      "Bash(PORT=3001 npm run dev)",
+      "Bash(timeout 8s npm run dev)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)"
     ],
     "deny": []
   }

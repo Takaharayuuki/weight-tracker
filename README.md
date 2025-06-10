@@ -143,14 +143,21 @@ weight-tracker-linebot/
 ### 本番環境用のGoogle認証情報準備
 
 ```bash
-# macOS/Linux: credentials.jsonをBase64エンコード
-base64 -i credentials.json
+# macOS/Linux: credentials.jsonをBase64エンコード（改行なし）
+base64 -i credentials.json | tr -d '\n'
+
+# または、1行で出力
+base64 -w 0 credentials.json  # Linux
+base64 -b 0 credentials.json  # macOS
 
 # Windows (PowerShell)
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("credentials.json"))
 
 # 出力された文字列（改行なし）をGOOGLE_CREDENTIALS_BASE64環境変数に設定
 # ⚠️ 重要: 改行文字は含めないでください
+
+# 検証コマンド（デコードして確認）
+echo $GOOGLE_CREDENTIALS_BASE64 | base64 -d | jq .
 ```
 
 **例**:

@@ -4,21 +4,42 @@ const fs = require('fs');
 
 // Google Sheets API認証設定
 function createGoogleAuth() {
-  console.log('Google認証情報の初期化を開始します...');
+  console.log('========== Google認証情報の初期化開始 ==========');
+  console.log(`現在の作業ディレクトリ: ${process.cwd()}`);
+  console.log(`現在のファイルパス: ${__filename}`);
+  console.log(`NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
   
   try {
+    // 環境変数の存在確認
+    console.log('🔍 環境変数チェック:');
+    console.log(`  - GOOGLE_CREDENTIALS_BASE64: ${process.env.GOOGLE_CREDENTIALS_BASE64 ? `設定済み (長さ: ${process.env.GOOGLE_CREDENTIALS_BASE64.length}文字)` : '未設定'}`);
+    console.log(`  - GOOGLE_SHEET_ID: ${process.env.GOOGLE_SHEET_ID || '未設定'}`);
+    
     // 本番環境（Render.com等）では環境変数からBase64デコードした認証情報を使用
     if (process.env.GOOGLE_CREDENTIALS_BASE64) {
       console.log('🔑 環境変数GOOGLE_CREDENTIALS_BASE64からGoogle認証情報を読み込みます');
       
+      // Base64文字列の詳細確認
+      const base64String = process.env.GOOGLE_CREDENTIALS_BASE64;
+      console.log(`  - Base64文字列の最初の50文字: ${base64String.substring(0, 50)}...`);
+      console.log(`  - Base64文字列の最後の50文字: ...${base64String.substring(base64String.length - 50)}`);
+      
       // Base64デコード
       let credentialsJson;
       try {
-        const decodedCredentials = Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf8');
+        console.log('📝 Base64デコードを開始します...');
+        const decodedCredentials = Buffer.from(base64String.trim(), 'base64').toString('utf8');
+        console.log(`  - デコード後の文字列長: ${decodedCredentials.length}文字`);
+        console.log(`  - デコード後の最初の100文字: ${decodedCredentials.substring(0, 100)}...`);
+        
+        console.log('📝 JSONパースを開始します...');
         credentialsJson = JSON.parse(decodedCredentials);
         console.log('✅ Base64デコードと JSON パースが成功しました');
       } catch (decodeError) {
-        console.error('❌ Base64デコードまたはJSONパースに失敗しました:', decodeError.message);
+        console.error('❌ Base64デコードまたはJSONパースに失敗しました:', decodeError);
+        console.error('  - エラー名:', decodeError.name);
+        console.error('  - エラーメッセージ:', decodeError.message);
+        console.error('  - スタックトレース:', decodeError.stack);
         throw new Error(`認証情報のデコードに失敗: ${decodeError.message}`);
       }
       
@@ -41,14 +62,36 @@ function createGoogleAuth() {
     // 開発環境ではcredentials.jsonファイルを使用
     else {
       console.log('📁 credentials.jsonファイルからGoogle認証情報を読み込みます');
-      const credentialsPath = path.join(__dirname, '../../credentials.json');
+      
+      // 複数のパスを試す（Render.comのパス問題対策）
+      const possiblePaths = [
+        path.join(__dirname, '../../credentials.json'),  // 通常のパス
+        path.join(process.cwd(), 'credentials.json'),    // プロジェクトルートから
+        path.join(__dirname, '../../../credentials.json'), // Render.comで二重パスの場合
+        '/opt/render/project/src/credentials.json'       // Render.com固有のパス
+      ];
+      
+      console.log('🔍 credentials.jsonファイルを検索中...');
+      let credentialsPath = null;
+      let foundPath = false;
+      
+      for (const testPath of possiblePaths) {
+        console.log(`  - 検索中: ${testPath}`);
+        if (fs.existsSync(testPath)) {
+          credentialsPath = testPath;
+          foundPath = true;
+          console.log(`  ✅ ファイル発見: ${testPath}`);
+          break;
+        }
+      }
       
       // ファイルの存在確認
-      if (!fs.existsSync(credentialsPath)) {
-        const warningMsg = `credentials.jsonファイルが見つかりません: ${credentialsPath}`;
-        console.warn(`⚠️  ${warningMsg}`);
+      if (!foundPath) {
+        console.warn('⚠️  credentials.jsonファイルが見つかりません');
+        console.warn('検索したパス:');
+        possiblePaths.forEach(p => console.warn(`  - ${p}`));
         console.warn('💡 本番環境では GOOGLE_CREDENTIALS_BASE64 環境変数を設定してください');
-        throw new Error(warningMsg);
+        throw new Error('credentials.jsonファイルが見つかりません');
       }
       
       // ファイル内容の検証
@@ -69,35 +112,67 @@ function createGoogleAuth() {
     }
   } catch (error) {
     console.error('❌ Google認証情報の読み込みに失敗しました:', error.message);
+    console.error('詳細エラー情報:', error);
     console.warn('⚠️  Google Sheets機能は無効になります。アプリケーションは続行しますが、データ保存機能は制限されます。');
     
     // デバッグ情報を出力
     console.log('🔍 デバッグ情報:');
     console.log(`   - NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
+    console.log(`   - 作業ディレクトリ: ${process.cwd()}`);
+    console.log(`   - スクリプトディレクトリ: ${__dirname}`);
     console.log(`   - GOOGLE_CREDENTIALS_BASE64: ${process.env.GOOGLE_CREDENTIALS_BASE64 ? '設定済み' : '未設定'}`);
-    console.log(`   - credentials.json: ${fs.existsSync(path.join(__dirname, '../../credentials.json')) ? '存在' : '不存在'}`);
+    
+    // ディレクトリ構造の確認
+    console.log('📂 現在のディレクトリ構造:');
+    try {
+      const files = fs.readdirSync(process.cwd());
+      files.forEach(file => console.log(`   - ${file}`));
+    } catch (e) {
+      console.error('   ディレクトリ読み取りエラー:', e.message);
+    }
     
     return null;
   }
 }
 
+console.log('========== Google認証情報の初期化完了 ==========');
+
 const auth = createGoogleAuth();
 
 // スプレッドシートID
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
+console.log(`📊 Google Sheet ID: ${SPREADSHEET_ID || '未設定'}`);
 
 // Sheets APIクライアント
 let sheets = null;
 
 // 初期化
 async function initialize() {
+  console.log('📝 Google Sheets APIクライアントを初期化中...');
+  
   if (!auth) {
-    throw new Error('Google認証が設定されていません');
+    console.error('❌ Google認証が設定されていません');
+    throw new Error('Google認証が設定されていません。環境変数GOOGLE_CREDENTIALS_BASE64またはcredentials.jsonファイルを確認してください。');
+  }
+  
+  if (!SPREADSHEET_ID) {
+    console.error('❌ GOOGLE_SHEET_IDが設定されていません');
+    throw new Error('環境変数GOOGLE_SHEET_IDが設定されていません');
   }
   
   if (!sheets) {
-    const authClient = await auth.getClient();
-    sheets = google.sheets({ version: 'v4', auth: authClient });
+    try {
+      console.log('🔐 認証クライアントを取得中...');
+      const authClient = await auth.getClient();
+      console.log('✅ 認証クライアント取得成功');
+      
+      console.log('📊 Google Sheets APIクライアントを作成中...');
+      sheets = google.sheets({ version: 'v4', auth: authClient });
+      console.log('✅ Google Sheets APIクライアント作成成功');
+    } catch (initError) {
+      console.error('❌ 初期化エラー:', initError);
+      throw initError;
+    }
   }
   return sheets;
 }
