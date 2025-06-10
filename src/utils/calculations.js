@@ -236,6 +236,123 @@ function calculateConsecutiveDays(weightHistory) {
   return consecutiveDays;
 }
 
+// 包括的な健康指標を計算
+function calculateHealthMetrics(weight, height, age = 30, gender = 'male') {
+  const heightM = height / 100;
+  
+  // BMI
+  const bmi = calculateBMI(weight, height);
+  const bmiStatus = getBMIStatus(bmi);
+  
+  // 各種体重
+  const standardWeight = heightM * heightM * 22; // BMI 22
+  const beautyWeight = heightM * heightM * 20;   // BMI 20
+  const modelWeight = heightM * heightM * 18;    // BMI 18
+  const maxHealthyWeight = heightM * heightM * 24.9; // BMI上限
+  const minHealthyWeight = heightM * heightM * 18.5; // BMI下限
+  
+  // 肥満度
+  const obesityRate = ((weight - standardWeight) / standardWeight) * 100;
+  
+  // 基礎代謝量
+  const bmr = estimateBMR(weight, height, age, gender);
+  
+  // 1日の推定必要カロリー
+  const dailyCalories = {
+    sedentary: Math.round(bmr * 1.2),    // ほぼ運動しない
+    light: Math.round(bmr * 1.375),      // 軽い運動（週1-3日）
+    moderate: Math.round(bmr * 1.55),    // 適度な運動（週3-5日）
+    active: Math.round(bmr * 1.725),     // ハードな運動（週6-7日）
+    veryActive: Math.round(bmr * 1.9)    // 非常にハード（週2回/日）
+  };
+  
+  // 健康的な減量目標
+  const healthyWeightLossPerWeek = weight * 0.005; // 体重の0.5%/週
+  const healthyWeightLossPerMonth = healthyWeightLossPerWeek * 4;
+  
+  // 1kg減らすのに必要なカロリー削減量
+  const caloriesPerKg = 7200; // 1kg = 約7200kcal
+  const dailyCalorieDeficitFor1kgPerMonth = caloriesPerKg / 30;
+  
+  return {
+    // 基本指標
+    bmi: Number(bmi),
+    bmiStatus,
+    
+    // 体重指標
+    currentWeight: weight,
+    standardWeight: Math.round(standardWeight * 10) / 10,
+    beautyWeight: Math.round(beautyWeight * 10) / 10,
+    modelWeight: Math.round(modelWeight * 10) / 10,
+    maxHealthyWeight: Math.round(maxHealthyWeight * 10) / 10,
+    minHealthyWeight: Math.round(minHealthyWeight * 10) / 10,
+    
+    // 差分
+    toStandardWeight: Math.round((weight - standardWeight) * 10) / 10,
+    toBeautyWeight: Math.round((weight - beautyWeight) * 10) / 10,
+    toHealthyRange: weight > maxHealthyWeight ? 
+      Math.round((weight - maxHealthyWeight) * 10) / 10 : 
+      weight < minHealthyWeight ? 
+      Math.round((minHealthyWeight - weight) * 10) / 10 : 0,
+    
+    // 肥満度
+    obesityRate: Math.round(obesityRate * 10) / 10,
+    obesityStatus: getObesityStatus(obesityRate),
+    
+    // 代謝・カロリー
+    bmr,
+    dailyCalories,
+    
+    // 健康的な減量目標
+    healthyWeightLoss: {
+      perWeek: Math.round(healthyWeightLossPerWeek * 10) / 10,
+      perMonth: Math.round(healthyWeightLossPerMonth * 10) / 10,
+      dailyCalorieDeficit: Math.round(dailyCalorieDeficitFor1kgPerMonth)
+    }
+  };
+}
+
+// 肥満度の状態を判定
+function getObesityStatus(obesityRate) {
+  if (obesityRate <= -10) {
+    return 'やせ';
+  } else if (obesityRate <= 10) {
+    return '正常';
+  } else if (obesityRate <= 20) {
+    return '過体重';
+  } else {
+    return '肥満';
+  }
+}
+
+// 健康指標の評価コメント
+function getHealthAdvice(metrics) {
+  const { bmi, obesityRate, toStandardWeight } = metrics;
+  let advice = [];
+  
+  // BMIによるアドバイス
+  if (bmi < 18.5) {
+    advice.push('🔸 BMIが低体重の範囲です。適度な筋力トレーニングと栄養バランスの良い食事を心がけましょう。');
+  } else if (bmi >= 18.5 && bmi < 25) {
+    advice.push('✅ BMIが理想的な範囲内です。現在の生活習慣を維持しましょう。');
+  } else if (bmi >= 25 && bmi < 30) {
+    advice.push('🔸 BMIがやや高めです。食事管理と運動で健康的な減量を心がけましょう。');
+  } else {
+    advice.push('⚠️ BMIが肥満の範囲です。医師と相談しながら計画的な減量をおすすめします。');
+  }
+  
+  // 標準体重との差によるアドバイス
+  if (Math.abs(toStandardWeight) <= 3) {
+    advice.push('🎯 標準体重に近い良好な状態です。');
+  } else if (toStandardWeight > 3) {
+    advice.push(`📉 標準体重まで${Math.abs(toStandardWeight).toFixed(1)}kg。月1-2kgのペースで減量しましょう。`);
+  } else {
+    advice.push(`📈 標準体重まで${Math.abs(toStandardWeight).toFixed(1)}kg。筋力アップと栄養補給を重視しましょう。`);
+  }
+  
+  return advice;
+}
+
 module.exports = {
   calculateBMI,
   getBMIStatus,
@@ -246,5 +363,8 @@ module.exports = {
   calculateIdealWeight,
   estimateBMR,
   getWeeklyProgress,
-  calculateConsecutiveDays
+  calculateConsecutiveDays,
+  calculateHealthMetrics,
+  getObesityStatus,
+  getHealthAdvice
 };

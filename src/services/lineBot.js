@@ -146,6 +146,14 @@ async function handleEvent(event) {
         return handleNameChangeRequest(event, userId, user);
       }
       
+      // 「直接入力します」への対応
+      if (messageText === '直接入力します') {
+        return client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '📝 体重を数値で入力してください\n\n例: 64.5\n\n※20〜300kgの範囲でお願いします'
+        });
+      }
+      
       // 「私は〇〇」「名前は〇〇」パターンでの名前変更
       if (messageText.startsWith('私は') || messageText.startsWith('名前は')) {
         return handleNameChange(event, userId, messageText, user);
@@ -186,6 +194,14 @@ async function handleEvent(event) {
       
       if (messageText === 'リセット' || messageText === '登録し直し' || messageText === '初期化') {
         return handleResetRequest(event, userId, user);
+      }
+      
+      if (messageText === '健康データ' || messageText === '健康指標' || messageText === 'BMI') {
+        return handleHealthDataRequest(event, userId, user);
+      }
+      
+      if (messageText === '詳細健康データ') {
+        return handleDetailedHealthDataRequest(event, userId, user);
       }
       
       if (messageText === '使い方') {
@@ -360,11 +376,51 @@ async function handleWeightRecord(event, userId, messageText, user) {
   // 数値として解析
   const weight = parseFloat(messageText);
   
-  if (isNaN(weight) || weight < 20 || weight > 300) {
-    console.log('無効な体重値:', messageText);
+  if (isNaN(weight)) {
+    console.log('数値以外が入力された:', messageText);
     return client.replyMessage(event.replyToken, {
       type: 'text',
-      text: 'あれ？体重を数値で入力してみてください😊\n（例: 69.5）\n\n20〜300kgの範囲でお願いします。'
+      text: '数字で入力してくださいね😊\n（例: 64.5）\n\n数値のみでお願いします！',
+      quickReply: {
+        items: [
+          {
+            type: 'action',
+            action: {
+              type: 'message',
+              label: 'もう一度入力',
+              text: '体重記録'
+            }
+          }
+        ]
+      }
+    });
+  }
+  
+  if (weight < 20 || weight > 300) {
+    console.log('範囲外の体重値:', messageText);
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: `本当に${weight}kgで合っていますか？🤔\n\n間違いなければもう一度入力してください。\n正しい範囲は20〜300kgです。`,
+      quickReply: {
+        items: [
+          {
+            type: 'action',
+            action: {
+              type: 'message',
+              label: `${weight}kg（確定）`,
+              text: weight.toString()
+            }
+          },
+          {
+            type: 'action',
+            action: {
+              type: 'message',
+              label: '訂正する',
+              text: '体重記録'
+            }
+          }
+        ]
+      }
     });
   }
 
@@ -373,54 +429,107 @@ async function handleWeightRecord(event, userId, messageText, user) {
   // 最新の体重を更新
   userStore.updateUser(userId, { currentWeight: weight, lastRecordDate: new Date() });
 
-  // 先にユーザーに応答を返す（週平均計算は後で非同期実行）
+  // 詳細フィードバック機能を実装
   const userName = user.name || 'ユーザー';
-  
-  // 前回の体重と比較
   const previousWeight = user.currentWeight;
   const weightDiff = previousWeight ? weight - previousWeight : 0;
   
-  let recordMessage = `${userName}さん、お疲れ様です！\n${weight}kg、しっかり記録しました📝`;
-  
-  if (previousWeight && weightDiff !== 0) {
-    const diffText = weightDiff > 0 ? `+${weightDiff.toFixed(1)}kg` : `${weightDiff.toFixed(1)}kg`;
-    const emoji = weightDiff < 0 ? '📉' : '📈';
-    recordMessage += `\n\n前回より${diffText} ${emoji}`;
-    
-    if (weightDiff < 0) {
-      recordMessage += '\nいい調子ですよ！';
-    } else if (weightDiff > 0) {
-      recordMessage += '\n体重は日々変動するもの。長期的な視点で見ましょう😊';
+  // 基本記録メッセージ
+  let feedback = `${userName}さん、お疲れ様です！\n${weight}kg、しっかり記録しました📝\n\n`;
+
+  // 前回との比較
+  if (previousWeight) {
+    if (Math.abs(weightDiff) < 0.1) {
+      feedback += '📊 前回とほぼ同じ。安定していますね\n';
+    } else if (weightDiff < 0) {
+      feedback += `📉 前回より${Math.abs(weightDiff).toFixed(1)}kg減！素晴らしい！\n`;
+    } else {
+      feedback += `📈 前回より${weightDiff.toFixed(1)}kg増\n`;
     }
   }
+
+  // 目標との差
+  const toGoal = weight - user.goalWeight;
+  if (toGoal > 0) {
+    feedback += `🎯 目標まであと${toGoal.toFixed(1)}kg\n`;
+  } else if (toGoal === 0) {
+    feedback += `🎉 目標達成！おめでとうございます！\n`;
+  } else {
+    feedback += `✨ 目標を${Math.abs(toGoal).toFixed(1)}kg下回っています！\n`;
+  }
   
+  // BMIと基本健康指標を追加
+  const bmi = calculations.calculateBMI(weight, user.height);
+  const bmiStatus = calculations.getBMIStatus(bmi);
+  const standardWeight = Math.round((user.height / 100) * (user.height / 100) * 22 * 10) / 10;
+  const toStandard = Math.round((weight - standardWeight) * 10) / 10;
+  
+  feedback += `\n📊 BMI: ${bmi.toFixed(1)}（${bmiStatus}）`;
+  
+  if (Math.abs(toStandard) <= 1) {
+    feedback += ` 👍`;
+  } else if (toStandard > 1) {
+    feedback += `\n📍 標準体重まで${toStandard.toFixed(1)}kg`;
+  } else {
+    feedback += `\n📍 標準体重まで+${Math.abs(toStandard).toFixed(1)}kg`;
+  }
+  
+  // 応答メッセージを送信
   const response = client.replyMessage(event.replyToken, [
     {
       type: 'text',
-      text: recordMessage
+      text: feedback
     },
     messages.getMotivationalMessage(weight, user.goalWeight)
   ]);
 
-  // Google Sheetsへの記録と週平均計算は非同期で実行
+  // Google Sheetsへの記録、統計計算、連続記録チェックを非同期で実行
   Promise.all([
     sheets.appendWeight(userId, weight, userName),
-    calculations.getWeeklyAverage(userId)
-  ]).then(([sheetsResult, weeklyAverage]) => {
+    calculations.getWeeklyAverage(userId),
+    sheets.getUserInfo(userId) // 連続記録日数取得用
+  ]).then(([sheetsResult, weeklyAverage, userInfo]) => {
     console.log('Google Sheets記録結果:', sheetsResult);
     
-    // 週平均のみ通知（エラーメッセージは簡略化）
     if (sheetsResult && !sheetsResult.success) {
       console.log('Google Sheetsエラー（ユーザーには通知しない）');
+      return;
     }
     
-    // 週平均が計算できた場合、追加メッセージを送信
+    // 追加メッセージを準備
+    const additionalMessages = [];
+    
+    // 週平均メッセージ
     if (weeklyAverage) {
-      client.pushMessage(userId, {
+      const weeklyChange = previousWeight ? weeklyAverage - previousWeight : 0;
+      let weeklyMessage = `📊 今週の平均体重: ${weeklyAverage.toFixed(1)}kg`;
+      
+      if (Math.abs(weeklyChange) >= 0.1) {
+        const changeText = weeklyChange > 0 ? `+${weeklyChange.toFixed(1)}kg` : `${weeklyChange.toFixed(1)}kg`;
+        weeklyMessage += `\n📅 今週の変化: ${changeText}`;
+      }
+      
+      additionalMessages.push({
         type: 'text',
-        text: `📊 今週の平均体重: ${weeklyAverage.toFixed(1)}kg\n\n継続が何より大切です！\n今日も記録してくれてありがとうございます✨`
-      }).catch(error => {
-        console.error('週平均メッセージ送信エラー:', error);
+        text: weeklyMessage
+      });
+    }
+    
+    // 連続記録のゲーミフィケーション
+    if (userInfo && userInfo.consecutiveDays) {
+      const streakMessage = getStreakMessage(userInfo.consecutiveDays);
+      if (streakMessage) {
+        additionalMessages.push({
+          type: 'text',
+          text: streakMessage
+        });
+      }
+    }
+    
+    // まとめてメッセージ送信
+    if (additionalMessages.length > 0) {
+      client.pushMessage(userId, additionalMessages).catch(error => {
+        console.error('追加メッセージ送信エラー:', error);
       });
     }
   }).catch(error => {
@@ -541,9 +650,72 @@ async function handleWeightInputRequest(event, userId, user) {
     requestedAt: new Date()
   });
   
+  // 前回の体重を基準にクイック返信ボタンを生成
+  const lastWeight = user.currentWeight || 65.0;
+  const baseWeight = Math.floor(lastWeight * 10) / 10; // 0.1kg単位で丸める
+  
+  // クイック返信ボタンを生成（前後1.5kgの範囲で0.5kg刻み）
+  const quickReplyItems = [];
+  
+  // よく使う体重帯を中心に配置
+  const weights = [
+    baseWeight - 1.5,
+    baseWeight - 1.0,
+    baseWeight - 0.5,
+    baseWeight,
+    baseWeight + 0.5,
+    baseWeight + 1.0,
+    baseWeight + 1.5
+  ];
+  
+  // 有効な体重範囲（30-300kg）に絞る
+  weights.forEach(w => {
+    if (w >= 30 && w <= 300) {
+      quickReplyItems.push({
+        type: 'action',
+        action: {
+          type: 'message',
+          label: `${w.toFixed(1)}kg`,
+          text: w.toFixed(1)
+        }
+      });
+    }
+  });
+  
+  // 前回と同じボタンを強調
+  if (!weights.includes(lastWeight)) {
+    quickReplyItems.unshift({
+      type: 'action',
+      action: {
+        type: 'message',
+        label: `${lastWeight.toFixed(1)}kg`,
+        text: lastWeight.toFixed(1)
+      }
+    });
+  }
+  
+  // その他ボタン
+  quickReplyItems.push({
+    type: 'action',
+    action: {
+      type: 'message',
+      label: 'その他',
+      text: '直接入力します'
+    }
+  });
+  
+  // 日替わりモチベーションメッセージ
+  const motivationalQuote = getMotivationalQuote();
+  
   return client.replyMessage(event.replyToken, {
     type: 'text',
-    text: '📝 今日の体重を数値で入力してください\n\n例: 70.5\n\n※30分以内に入力してください'
+    text: `${user.name}さん、おはようございます！☀️\n\n` +
+          `今朝の体重を教えてください💪\n\n` +
+          `前回の記録: ${lastWeight.toFixed(1)}kg\n\n` +
+          `${motivationalQuote}`,
+    quickReply: {
+      items: quickReplyItems.slice(0, 13) // 最大13個
+    }
   });
 }
 
@@ -637,6 +809,281 @@ async function handleSettingsMenuRequest(event, userId, user) {
   });
 }
 
+// 健康データリクエストの処理
+async function handleHealthDataRequest(event, userId, user) {
+  console.log('健康データリクエスト処理開始');
+  
+  try {
+    // 包括的な健康指標を計算（30歳男性と仮定）
+    const healthMetrics = calculations.calculateHealthMetrics(
+      user.currentWeight, 
+      user.height, 
+      30, // 年齢（デフォルト）
+      'male' // 性別（デフォルト）
+    );
+    
+    // Flex Messageで見やすく表示
+    const flexMessage = {
+      type: 'flex',
+      altText: `${user.name}さんの健康データ`,
+      contents: {
+        type: 'bubble',
+        header: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{
+            type: 'text',
+            text: `📊 ${user.name}さんの健康データ`,
+            weight: 'bold',
+            size: 'lg',
+            color: '#ffffff',
+            align: 'center'
+          }],
+          backgroundColor: '#667eea',
+          paddingAll: 'lg'
+        },
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'md',
+          contents: [
+            // BMIセクション
+            {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                {
+                  type: 'text',
+                  text: 'BMI指標',
+                  weight: 'bold',
+                  size: 'md',
+                  color: '#333333'
+                },
+                {
+                  type: 'box',
+                  layout: 'horizontal',
+                  margin: 'sm',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: `${healthMetrics.bmi.toFixed(1)}`,
+                      weight: 'bold',
+                      size: 'xxl',
+                      color: getBMIStatusColor(healthMetrics.bmi),
+                      flex: 2
+                    },
+                    {
+                      type: 'text',
+                      text: healthMetrics.bmiStatus,
+                      size: 'lg',
+                      color: getBMIStatusColor(healthMetrics.bmi),
+                      align: 'end',
+                      flex: 3
+                    }
+                  ]
+                }
+              ]
+            },
+            
+            // セパレーター
+            { type: 'separator', margin: 'lg' },
+            
+            // 体重セクション
+            {
+              type: 'text',
+              text: '体重の目安',
+              weight: 'bold',
+              size: 'md',
+              color: '#333333',
+              margin: 'lg'
+            },
+            {
+              type: 'box',
+              layout: 'vertical',
+              spacing: 'sm',
+              margin: 'sm',
+              contents: [
+                createWeightRow('現在', user.currentWeight, '#667eea', true),
+                createWeightRow('標準', healthMetrics.standardWeight, '#10b981'),
+                createWeightRow('美容', healthMetrics.beautyWeight, '#f59e0b'),
+                createWeightRow('健康範囲', `${healthMetrics.minHealthyWeight}〜${healthMetrics.maxHealthyWeight}`, '#6b7280')
+              ]
+            },
+            
+            // 基礎代謝セクション
+            { type: 'separator', margin: 'lg' },
+            {
+              type: 'text',
+              text: '基礎代謝量（推定）',
+              weight: 'bold',
+              size: 'md',
+              color: '#333333',
+              margin: 'lg'
+            },
+            {
+              type: 'box',
+              layout: 'horizontal',
+              margin: 'sm',
+              contents: [
+                {
+                  type: 'text',
+                  text: `${healthMetrics.bmr}`,
+                  size: 'xl',
+                  weight: 'bold',
+                  color: '#667eea',
+                  flex: 2
+                },
+                {
+                  type: 'text',
+                  text: 'kcal/日',
+                  size: 'md',
+                  color: '#666666',
+                  align: 'end',
+                  flex: 1
+                }
+              ]
+            },
+            
+            // 必要カロリー
+            {
+              type: 'text',
+              text: '活動レベル別必要カロリー',
+              weight: 'bold',
+              size: 'sm',
+              color: '#333333',
+              margin: 'lg'
+            },
+            {
+              type: 'box',
+              layout: 'vertical',
+              spacing: 'xs',
+              margin: 'sm',
+              contents: [
+                createCalorieRow('軽い活動', healthMetrics.dailyCalories.sedentary),
+                createCalorieRow('適度な運動', healthMetrics.dailyCalories.moderate),
+                createCalorieRow('活発な運動', healthMetrics.dailyCalories.active)
+              ]
+            },
+            
+            // アドバイス
+            { type: 'separator', margin: 'lg' },
+            {
+              type: 'text',
+              text: getHealthAdvice(healthMetrics.bmi, user.goalWeight, user.currentWeight),
+              wrap: true,
+              size: 'sm',
+              color: '#666666',
+              margin: 'lg'
+            }
+          ]
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'sm',
+          contents: [
+            {
+              type: 'button',
+              style: 'primary',
+              height: 'sm',
+              action: {
+                type: 'message',
+                label: '詳細な健康データを見る',
+                text: '詳細健康データ'
+              },
+              color: '#667eea'
+            }
+          ]
+        }
+      }
+    };
+    
+    return client.replyMessage(event.replyToken, flexMessage);
+    
+  } catch (error) {
+    console.error('健康データ計算エラー:', error);
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '申し訳ございません。健康データの計算に失敗しました。\n\n後ほど再度お試しください。'
+    });
+  }
+}
+
+// 詳細健康データリクエストの処理（テキスト版）
+async function handleDetailedHealthDataRequest(event, userId, user) {
+  console.log('詳細健康データリクエスト処理開始');
+  
+  try {
+    // 包括的な健康指標を計算（30歳男性と仮定）
+    const healthMetrics = calculations.calculateHealthMetrics(
+      user.currentWeight, 
+      user.height, 
+      30, // 年齢（デフォルト）
+      'male' // 性別（デフォルト）
+    );
+    
+    // 健康アドバイスを取得
+    const advice = calculations.getHealthAdvice(healthMetrics);
+    
+    // メッセージを構築
+    let healthMessage = `📊 ${user.name}さんの詳細健康データ\n\n`;
+    
+    // 基本指標
+    healthMessage += `【基本指標】\n`;
+    healthMessage += `BMI: ${healthMetrics.bmi}（${healthMetrics.bmiStatus}）\n`;
+    healthMessage += `肥満度: ${healthMetrics.obesityRate}%（${healthMetrics.obesityStatus}）\n\n`;
+    
+    // 体重指標
+    healthMessage += `【理想体重】\n`;
+    healthMessage += `標準体重: ${healthMetrics.standardWeight}kg`;
+    if (healthMetrics.toStandardWeight !== 0) {
+      const diff = healthMetrics.toStandardWeight > 0 ? `+${healthMetrics.toStandardWeight}` : healthMetrics.toStandardWeight;
+      healthMessage += `（現在との差: ${diff}kg）`;
+    }
+    healthMessage += `\n`;
+    healthMessage += `美容体重: ${healthMetrics.beautyWeight}kg`;
+    if (healthMetrics.toBeautyWeight !== 0) {
+      const diff = healthMetrics.toBeautyWeight > 0 ? `+${healthMetrics.toBeautyWeight}` : healthMetrics.toBeautyWeight;
+      healthMessage += `（現在との差: ${diff}kg）`;
+    }
+    healthMessage += `\n`;
+    healthMessage += `健康体重範囲: ${healthMetrics.minHealthyWeight}〜${healthMetrics.maxHealthyWeight}kg\n\n`;
+    
+    // 代謝・カロリー
+    healthMessage += `【代謝・カロリー】\n`;
+    healthMessage += `基礎代謝量: 約${healthMetrics.bmr}kcal/日\n\n`;
+    healthMessage += `1日の推定必要カロリー:\n`;
+    healthMessage += `・運動しない: ${healthMetrics.dailyCalories.sedentary}kcal\n`;
+    healthMessage += `・軽い運動: ${healthMetrics.dailyCalories.light}kcal\n`;
+    healthMessage += `・適度な運動: ${healthMetrics.dailyCalories.moderate}kcal\n`;
+    healthMessage += `・ハードな運動: ${healthMetrics.dailyCalories.active}kcal\n\n`;
+    
+    // 健康的な減量目標
+    healthMessage += `【健康的な減量ペース】\n`;
+    healthMessage += `週: ${healthMetrics.healthyWeightLoss.perWeek}kg\n`;
+    healthMessage += `月: ${healthMetrics.healthyWeightLoss.perMonth}kg\n`;
+    healthMessage += `（1日${healthMetrics.healthyWeightLoss.dailyCalorieDeficit}kcal減）\n\n`;
+    
+    // アドバイス
+    healthMessage += `【アドバイス】\n`;
+    advice.forEach(tip => {
+      healthMessage += `${tip}\n`;
+    });
+    
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: healthMessage
+    });
+    
+  } catch (error) {
+    console.error('詳細健康データ計算エラー:', error);
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '申し訳ございません。健康データの計算に失敗しました。\n\n後ほど再度お試しください。'
+    });
+  }
+}
+
 // ヘルプリクエストの処理
 async function handleHelpRequest(event, userId, user) {
   console.log('ヘルプリクエスト処理開始');
@@ -656,6 +1103,7 @@ async function handleHelpRequest(event, userId, user) {
     `【従来のコマンド】\n` +
     `• 進捗確認: 「進捗」\n` +
     `• グラフ表示: 「推移」「履歴」\n` +
+    `• 健康データ: 「健康データ」「BMI」\n` +
     `• 完全リセット: 「リセット」\n` +
     `• ヒント: 「ヒント」\n\n` +
     `【自動機能】\n` +
@@ -921,6 +1369,120 @@ ${metadata.progress}`;
 // ユーザーにメッセージを送信
 async function pushMessage(userId, messages) {
   return client.pushMessage(userId, messages);
+}
+
+// 日替わりモチベーションメッセージ
+function getMotivationalQuote() {
+  const quotes = [
+    '💭 小さな一歩が大きな変化を生みます',
+    '🌱 今日の努力は明日の自分への贈り物',
+    '⭐ 継続は力なり！素晴らしい習慣です',
+    '🎯 目標に向かって、今日も一歩前進',
+    '💪 あなたの頑張りを応援しています',
+    '🌈 体重の変化は波があるもの。長期的な視点で',
+    '✨ 記録することが成功への第一歩',
+    '🏃 健康的な体作り、一緒に頑張りましょう'
+  ];
+  
+  const today = new Date().getDay();
+  return quotes[today % quotes.length];
+}
+
+// 連続記録日数に応じた特別メッセージとバッジ
+function getStreakMessage(streakDays) {
+  if (streakDays === 3) {
+    return '🥉 3日連続達成！素晴らしいスタートです！';
+  } else if (streakDays === 7) {
+    return '🥈 1週間連続達成！習慣化されてきましたね！';
+  } else if (streakDays === 14) {
+    return '🥇 2週間連続達成！もう習慣の一部ですね！';
+  } else if (streakDays === 30) {
+    return '🏆 1ヶ月連続達成！本当に素晴らしい！！';
+  } else if (streakDays === 100) {
+    return '💎 100日連続達成！レジェンド級です！！！';
+  } else if (streakDays > 0 && streakDays % 10 === 0) {
+    return `🎊 ${streakDays}日連続記録中！amazing！`;
+  }
+  return null;
+}
+
+// BMIステータスに応じた色を取得
+function getBMIStatusColor(bmi) {
+  if (bmi < 18.5) {
+    return '#3b82f6'; // 青色（低体重）
+  } else if (bmi < 25) {
+    return '#10b981'; // 緑色（普通体重）
+  } else if (bmi < 30) {
+    return '#f59e0b'; // オレンジ色（肥満1度）
+  } else {
+    return '#ef4444'; // 赤色（肥満2度以上）
+  }
+}
+
+// 体重行を作成
+function createWeightRow(label, value, color, isEmphasis = false) {
+  return {
+    type: 'box',
+    layout: 'horizontal',
+    contents: [
+      {
+        type: 'text',
+        text: label,
+        size: 'sm',
+        color: '#666666',
+        flex: 2
+      },
+      {
+        type: 'text',
+        text: typeof value === 'number' ? `${value}kg` : `${value}kg`,
+        size: isEmphasis ? 'md' : 'sm',
+        weight: isEmphasis ? 'bold' : 'regular',
+        color: color,
+        align: 'end',
+        flex: 3
+      }
+    ]
+  };
+}
+
+// カロリー行を作成
+function createCalorieRow(label, calories) {
+  return {
+    type: 'box',
+    layout: 'horizontal',
+    contents: [
+      {
+        type: 'text',
+        text: label,
+        size: 'xs',
+        color: '#666666',
+        flex: 3
+      },
+      {
+        type: 'text',
+        text: `${calories}kcal`,
+        size: 'xs',
+        color: '#333333',
+        align: 'end',
+        flex: 2
+      }
+    ]
+  };
+}
+
+// 健康アドバイスを取得
+function getHealthAdvice(bmi, goalWeight, currentWeight) {
+  if (bmi < 18.5) {
+    return '💡 低体重です。健康的に体重を増やすことを検討してください。栄養バランスの良い食事と適度な筋力トレーニングをおすすめします。';
+  } else if (bmi >= 30) {
+    return '⚠️ 肥満の範囲です。医師と相談しながら計画的な減量をおすすめします。食事管理と運動を組み合わせて健康的に取り組みましょう。';
+  } else if (bmi >= 25) {
+    return '💡 健康リスクを減らすため、適度な減量をおすすめします。月1-2kgのペースで、無理のない範囲で取り組みましょう。';
+  } else if (Math.abs(currentWeight - goalWeight) < 1) {
+    return '✨ 目標達成！この健康的な状態を維持しましょう。継続的な運動と栄養バランスの良い食事を心がけてください。';
+  } else {
+    return '💡 健康的な範囲内です。目標に向けて継続しましょう。小さな変化の積み重ねが大きな成果につながります。';
+  }
 }
 
 module.exports = {
