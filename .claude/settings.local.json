@@ -5,7 +5,8 @@
       "Bash(PORT=3001 npm run dev)",
       "Bash(timeout 8s npm run dev)",
       "Bash(curl:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(timeout 5s npm start)"
     ],
     "deny": []
   }

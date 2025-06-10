@@ -184,16 +184,21 @@ git push heroku main
 
 1. **GitHubリポジトリをRender.comに接続**
 
-2. **Environment Variables設定**:
+2. **Secret Files設定** (推奨):
+   - Render.com Dashboard → Service → Secret Files
+   - ファイル名: `credentials.json`
+   - ファイル内容: Google Cloud Service Accountの認証情報
+   - パス: `/etc/secrets/credentials.json` （自動設定）
+
+3. **Environment Variables設定**:
    ```
    LINE_CHANNEL_ACCESS_TOKEN=your_line_access_token
    LINE_CHANNEL_SECRET=your_line_channel_secret
    GOOGLE_SHEET_ID=your_spreadsheet_id
-   GOOGLE_CREDENTIALS_BASE64=your_base64_encoded_credentials
    NODE_ENV=production
    ```
 
-3. **Build & Start Commands**:
+4. **Build & Start Commands**:
    ```
    Build Command: npm install
    Start Command: npm start

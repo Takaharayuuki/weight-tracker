@@ -10,38 +10,28 @@ function createGoogleAuth() {
   console.log(`NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
   
   try {
-    // 環境変数の存在確認
     console.log('🔍 環境変数チェック:');
-    console.log(`  - GOOGLE_CREDENTIALS_BASE64: ${process.env.GOOGLE_CREDENTIALS_BASE64 ? `設定済み (長さ: ${process.env.GOOGLE_CREDENTIALS_BASE64.length}文字)` : '未設定'}`);
     console.log(`  - GOOGLE_SHEET_ID: ${process.env.GOOGLE_SHEET_ID || '未設定'}`);
     
-    // 本番環境（Render.com等）では環境変数からBase64デコードした認証情報を使用
-    if (process.env.GOOGLE_CREDENTIALS_BASE64) {
-      console.log('🔑 環境変数GOOGLE_CREDENTIALS_BASE64からGoogle認証情報を読み込みます');
-      
-      // Base64文字列の詳細確認
-      const base64String = process.env.GOOGLE_CREDENTIALS_BASE64;
-      console.log(`  - Base64文字列の最初の50文字: ${base64String.substring(0, 50)}...`);
-      console.log(`  - Base64文字列の最後の50文字: ...${base64String.substring(base64String.length - 50)}`);
-      
-      // Base64デコード
-      let credentialsJson;
-      try {
-        console.log('📝 Base64デコードを開始します...');
-        const decodedCredentials = Buffer.from(base64String.trim(), 'base64').toString('utf8');
-        console.log(`  - デコード後の文字列長: ${decodedCredentials.length}文字`);
-        console.log(`  - デコード後の最初の100文字: ${decodedCredentials.substring(0, 100)}...`);
-        
-        console.log('📝 JSONパースを開始します...');
-        credentialsJson = JSON.parse(decodedCredentials);
-        console.log('✅ Base64デコードと JSON パースが成功しました');
-      } catch (decodeError) {
-        console.error('❌ Base64デコードまたはJSONパースに失敗しました:', decodeError);
-        console.error('  - エラー名:', decodeError.name);
-        console.error('  - エラーメッセージ:', decodeError.message);
-        console.error('  - スタックトレース:', decodeError.stack);
-        throw new Error(`認証情報のデコードに失敗: ${decodeError.message}`);
-      }
+    // 認証ファイルのパスを環境に応じて設定
+    const credentialsPath = process.env.NODE_ENV === 'production' 
+      ? '/etc/secrets/credentials.json' 
+      : path.join(__dirname, '../../credentials.json');
+    
+    console.log(`📁 Google認証ファイルパス: ${credentialsPath}`);
+    
+    // ファイルの存在確認
+    if (!fs.existsSync(credentialsPath)) {
+      console.error(`❌ 認証ファイルが見つかりません: ${credentialsPath}`);
+      throw new Error(`認証ファイルが見つかりません: ${credentialsPath}`);
+    }
+    
+    console.log('✅ 認証ファイルが見つかりました');
+    
+    // ファイル内容の検証
+    try {
+      const fileContent = fs.readFileSync(credentialsPath, 'utf8');
+      const credentialsJson = JSON.parse(fileContent);
       
       // 必要なフィールドの検証
       const requiredFields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email'];
@@ -54,62 +44,16 @@ function createGoogleAuth() {
       console.log(`📧 サービスアカウント: ${credentialsJson.client_email}`);
       console.log(`📁 プロジェクトID: ${credentialsJson.project_id}`);
       
-      return new google.auth.GoogleAuth({
-        credentials: credentialsJson,
-        scopes: ['https://www.googleapis.com/auth/spreadsheets']
-      });
-    } 
-    // 開発環境ではcredentials.jsonファイルを使用
-    else {
-      console.log('📁 credentials.jsonファイルからGoogle認証情報を読み込みます');
-      
-      // 複数のパスを試す（Render.comのパス問題対策）
-      const possiblePaths = [
-        path.join(__dirname, '../../credentials.json'),  // 通常のパス
-        path.join(process.cwd(), 'credentials.json'),    // プロジェクトルートから
-        path.join(__dirname, '../../../credentials.json'), // Render.comで二重パスの場合
-        '/opt/render/project/src/credentials.json'       // Render.com固有のパス
-      ];
-      
-      console.log('🔍 credentials.jsonファイルを検索中...');
-      let credentialsPath = null;
-      let foundPath = false;
-      
-      for (const testPath of possiblePaths) {
-        console.log(`  - 検索中: ${testPath}`);
-        if (fs.existsSync(testPath)) {
-          credentialsPath = testPath;
-          foundPath = true;
-          console.log(`  ✅ ファイル発見: ${testPath}`);
-          break;
-        }
-      }
-      
-      // ファイルの存在確認
-      if (!foundPath) {
-        console.warn('⚠️  credentials.jsonファイルが見つかりません');
-        console.warn('検索したパス:');
-        possiblePaths.forEach(p => console.warn(`  - ${p}`));
-        console.warn('💡 本番環境では GOOGLE_CREDENTIALS_BASE64 環境変数を設定してください');
-        throw new Error('credentials.jsonファイルが見つかりません');
-      }
-      
-      // ファイル内容の検証
-      try {
-        const fileContent = fs.readFileSync(credentialsPath, 'utf8');
-        const credentialsJson = JSON.parse(fileContent);
-        console.log(`📧 サービスアカウント: ${credentialsJson.client_email}`);
-        console.log(`📁 プロジェクトID: ${credentialsJson.project_id}`);
-      } catch (fileError) {
-        console.error('❌ credentials.jsonファイルの読み取りまたはパースに失敗:', fileError.message);
-        throw new Error(`credentials.jsonファイルが無効: ${fileError.message}`);
-      }
-      
-      return new google.auth.GoogleAuth({
-        keyFile: credentialsPath,
-        scopes: ['https://www.googleapis.com/auth/spreadsheets']
-      });
+    } catch (fileError) {
+      console.error('❌ credentials.jsonファイルの読み取りまたはパースに失敗:', fileError.message);
+      throw new Error(`credentials.jsonファイルが無効: ${fileError.message}`);
     }
+    
+    console.log('🔑 Google認証クライアントを作成します');
+    return new google.auth.GoogleAuth({
+      keyFile: credentialsPath,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
   } catch (error) {
     console.error('❌ Google認証情報の読み込みに失敗しました:', error.message);
     console.error('詳細エラー情報:', error);
@@ -120,7 +64,6 @@ function createGoogleAuth() {
     console.log(`   - NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
     console.log(`   - 作業ディレクトリ: ${process.cwd()}`);
     console.log(`   - スクリプトディレクトリ: ${__dirname}`);
-    console.log(`   - GOOGLE_CREDENTIALS_BASE64: ${process.env.GOOGLE_CREDENTIALS_BASE64 ? '設定済み' : '未設定'}`);
     
     // ディレクトリ構造の確認
     console.log('📂 現在のディレクトリ構造:');
@@ -129,6 +72,17 @@ function createGoogleAuth() {
       files.forEach(file => console.log(`   - ${file}`));
     } catch (e) {
       console.error('   ディレクトリ読み取りエラー:', e.message);
+    }
+    
+    // 本番環境では /etc/secrets/ ディレクトリの確認
+    if (process.env.NODE_ENV === 'production') {
+      console.log('📂 /etc/secrets/ ディレクトリ構造:');
+      try {
+        const secretFiles = fs.readdirSync('/etc/secrets/');
+        secretFiles.forEach(file => console.log(`   - ${file}`));
+      } catch (e) {
+        console.error('   /etc/secrets/ ディレクトリ読み取りエラー:', e.message);
+      }
     }
     
     return null;
@@ -152,7 +106,7 @@ async function initialize() {
   
   if (!auth) {
     console.error('❌ Google認証が設定されていません');
-    throw new Error('Google認証が設定されていません。環境変数GOOGLE_CREDENTIALS_BASE64またはcredentials.jsonファイルを確認してください。');
+    throw new Error('Google認証が設定されていません。credentials.jsonファイルを確認してください。');
   }
   
   if (!SPREADSHEET_ID) {

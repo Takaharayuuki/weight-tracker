@@ -77,6 +77,9 @@ ngrok http 3000     # Expose local server for LINE webhook testing
    - LINE_CHANNEL_ACCESS_TOKEN
    - LINE_CHANNEL_SECRET
    - GOOGLE_SHEET_ID
+4. Google認証情報:
+   - 開発環境: `credentials.json` ファイル（プロジェクトルート）
+   - 本番環境: Render.com Secret Files (`/etc/secrets/credentials.json`)
 
 ## Testing Approach
 
