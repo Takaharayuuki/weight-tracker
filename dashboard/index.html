@@ -1016,6 +1016,11 @@
                         </div>
                     </div>
 
+                    <h3 style="margin-bottom: 1rem;">📈 体重推移グラフ</h3>
+                    <div style="background: var(--background); padding: 1rem; border-radius: 10px; margin-bottom: 2rem;">
+                        <canvas id="userWeightChart" width="400" height="200"></canvas>
+                    </div>
+
                     <h3 style="margin-bottom: 1rem;">最近の記録</h3>
                     <div style="background: var(--background); padding: 1rem; border-radius: 10px;">
                         ${userDetail.recentHistory.length > 0 ? 
@@ -1032,12 +1037,169 @@
 
                 document.getElementById('userModal').classList.add('active');
                 
+                // グラフ描画（モーダルが表示された後に実行）
+                setTimeout(() => {
+                    createUserWeightChart(userDetail);
+                }, 100);
+                
             } catch (error) {
                 console.error('User detail loading error:', error);
                 showError('ユーザー詳細の読み込みに失敗しました');
             } finally {
                 showLoading(false);
             }
+        }
+
+        // 個人の体重推移グラフを作成
+        function createUserWeightChart(userDetail) {
+            const canvas = document.getElementById('userWeightChart');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            
+            // 既存のグラフがあれば破棄
+            if (window.userChart) {
+                window.userChart.destroy();
+            }
+            
+            // データの準備
+            const history = userDetail.recentHistory || [];
+            const labels = history.map(record => {
+                const date = new Date(record.date.replace(/\//g, '-'));
+                return `${date.getMonth() + 1}/${date.getDate()}`;
+            });
+            
+            const weights = history.map(record => record.weight);
+            const goalWeights = history.map(() => userDetail.goalWeight);
+            
+            // データがない場合の表示
+            if (history.length === 0) {
+                ctx.fillStyle = 'var(--text-secondary)';
+                ctx.font = '16px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('データがありません', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+            
+            // グラフの設定
+            const chartConfig = {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '体重',
+                            data: weights,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            pointBackgroundColor: '#667eea',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointRadius: 5,
+                            fill: true
+                        },
+                        {
+                            label: '目標体重',
+                            data: goalWeights,
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            tension: 0,
+                            pointRadius: 0,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${userDetail.name || 'ユーザー'}さんの体重推移`,
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            },
+                            color: 'var(--text-primary)'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20,
+                                color: 'var(--text-primary)'
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'var(--surface)',
+                            titleColor: 'var(--text-primary)',
+                            bodyColor: 'var(--text-primary)',
+                            borderColor: 'var(--border-color)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        return `体重: ${context.parsed.y}kg`;
+                                    } else {
+                                        return `目標: ${context.parsed.y}kg`;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: '日付',
+                                color: 'var(--text-secondary)'
+                            },
+                            ticks: {
+                                color: 'var(--text-secondary)'
+                            },
+                            grid: {
+                                color: 'var(--border-color)'
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: '体重 (kg)',
+                                color: 'var(--text-secondary)'
+                            },
+                            ticks: {
+                                color: 'var(--text-secondary)',
+                                callback: function(value) {
+                                    return value + 'kg';
+                                }
+                            },
+                            grid: {
+                                color: 'var(--border-color)'
+                            },
+                            beginAtZero: false
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            };
+            
+            // グラフを作成
+            window.userChart = new Chart(ctx, chartConfig);
         }
 
         // Close user modal

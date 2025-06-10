@@ -102,7 +102,20 @@ app.get('/api/users', requireAuth, async (req, res) => {
     console.log('ダッシュボードAPI: 全ユーザー一覧取得開始');
     
     // インメモリのユーザー情報を取得
-    const allUsers = userStore.getAllUsers();
+    let allUsers = userStore.getAllUsers();
+    
+    // ユーザーが0人の場合、Google Sheetsから復元を試みる
+    if (allUsers.size === 0) {
+      console.log('⚠️ インメモリにユーザーが存在しません。Google Sheetsから復元を試みます...');
+      const restoredCount = await userStore.restoreFromSheets();
+      if (restoredCount > 0) {
+        console.log(`✅ ${restoredCount}人のユーザーを復元しました`);
+        allUsers = userStore.getAllUsers();
+      } else {
+        console.log('⚠️ 復元できるユーザーが見つかりませんでした');
+      }
+    }
+    
     const users = [];
     
     for (const [userId, user] of allUsers) {
@@ -254,7 +267,19 @@ app.get('/api/dashboard-stats', requireAuth, async (req, res) => {
   try {
     console.log('ダッシュボードAPI: 統計情報取得開始');
     
-    const allUsers = userStore.getAllUsers();
+    // インメモリのユーザー情報を取得
+    let allUsers = userStore.getAllUsers();
+    
+    // ユーザーが0人の場合、Google Sheetsから復元を試みる
+    if (allUsers.size === 0) {
+      console.log('⚠️ インメモリにユーザーが存在しません。Google Sheetsから復元を試みます...');
+      const restoredCount = await userStore.restoreFromSheets();
+      if (restoredCount > 0) {
+        console.log(`✅ ${restoredCount}人のユーザーを復元しました`);
+        allUsers = userStore.getAllUsers();
+      }
+    }
+    
     const completedUsers = Array.from(allUsers.values()).filter(user => user.isCompleted);
     
     // 基本統計
@@ -433,7 +458,7 @@ app.use((err, req, res, next) => {
 });
 
 // サーバー起動
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`サーバーが起動しました。ポート: ${PORT}`);
   console.log(`環境: ${process.env.NODE_ENV || 'development'}`);
   console.log(`ダッシュボードパスワード: ${DASHBOARD_PASSWORD !== 'default-password' ? '設定済み' : 'デフォルト'}`);
@@ -442,6 +467,19 @@ app.listen(PORT, () => {
   console.log('  GET  /api/users - 全ユーザー一覧');
   console.log('  GET  /api/users/:userId - ユーザー詳細');
   console.log('  GET  /api/dashboard-stats - 統計情報');
+  
+  // 起動時にユーザーデータを復元
+  console.log('🔄 Google Sheetsからユーザーデータの復元を開始...');
+  try {
+    const restoredCount = await userStore.restoreFromSheets();
+    if (restoredCount > 0) {
+      console.log(`✅ ${restoredCount}人のユーザーを復元しました`);
+    } else {
+      console.log('ℹ️  復元するユーザーデータが見つかりませんでした');
+    }
+  } catch (error) {
+    console.error('⚠️ ユーザーデータ復元エラー:', error);
+  }
   
   // スケジューラーの開始
   scheduler.startSchedulers();

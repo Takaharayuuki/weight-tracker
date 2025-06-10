@@ -127,6 +127,37 @@ async function saveToDatabase() {
   console.log('データベースへの保存機能は未実装です');
 }
 
+// Google Sheetsからデータを復元
+async function restoreFromSheets() {
+  try {
+    const sheets = require('../services/sheets');
+    const usersFromSheets = await sheets.getAllUsersFromManagementSheet();
+    
+    console.log(`Google Sheetsから${usersFromSheets.length}人のユーザーを復元中...`);
+    
+    for (const userData of usersFromSheets) {
+      const user = new User(userData.lineUserId);
+      user.name = userData.name;
+      user.goalWeight = userData.goalWeight;
+      user.currentWeight = userData.currentWeight;
+      user.height = userData.height;
+      user.wakeTime = userData.wakeTime;
+      user.isCompleted = true;
+      user.registrationStep = 6;
+      user.lastRecordDate = userData.lastRecordDate ? new Date(userData.lastRecordDate.replace(/\//g, '-')) : null;
+      
+      users.set(userData.lineUserId, user);
+      console.log(`ユーザー復元: ${userData.name || userData.lineUserId}`);
+    }
+    
+    console.log(`✅ ${usersFromSheets.length}人のユーザーをインメモリストアに復元しました`);
+    return usersFromSheets.length;
+  } catch (error) {
+    console.error('Google Sheetsからのユーザー復元エラー:', error);
+    return 0;
+  }
+}
+
 // データの復元（将来の実装のためのプレースホルダー）
 async function loadFromDatabase() {
   // TODO: データベースからの読み込み処理
@@ -156,5 +187,6 @@ module.exports = {
   getUsersWithoutTodayRecord,
   saveToDatabase,
   loadFromDatabase,
+  restoreFromSheets,
   debugPrintAllUsers
 };

@@ -561,6 +561,51 @@ async function getAllUsersData() {
   }
 }
 
+// ユーザー管理シートから全ユーザー情報を取得（userStore復元用）
+async function getAllUsersFromManagementSheet() {
+  try {
+    await initialize();
+    await ensureUserManagementSheet();
+    
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'ユーザー管理!A:I',
+    });
+    
+    const rows = result.data.values || [];
+    const users = [];
+    
+    // ヘッダー行をスキップして処理
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.length >= 7 && row[0]) { // ユーザーIDが存在する行のみ
+        const user = {
+          lineUserId: row[0],
+          name: row[1] || '',
+          goalWeight: parseFloat(row[2]) || null,
+          currentWeight: parseFloat(row[3]) || null,
+          height: parseFloat(row[4]) || null,
+          wakeTime: row[5] || null,
+          registrationDate: row[6] || '',
+          lastRecordDate: row[7] || '',
+          consecutiveDays: parseInt(row[8]) || 0
+        };
+        
+        // 有効なユーザーデータのみ追加
+        if (user.lineUserId && user.goalWeight && user.currentWeight && user.height && user.wakeTime) {
+          users.push(user);
+        }
+      }
+    }
+    
+    console.log(`ユーザー管理シートから${users.length}人のユーザー情報を取得しました`);
+    return users;
+  } catch (error) {
+    console.error('ユーザー管理シートからの読み取りエラー:', error);
+    return [];
+  }
+}
+
 // スプレッドシートの初期設定（ヘッダー行の追加）
 async function initializeSheet() {
   try {
@@ -586,6 +631,7 @@ module.exports = {
   appendWeight,
   getUserWeightHistory,
   getAllUsersData,
+  getAllUsersFromManagementSheet,
   initializeSheet,
   saveUserInfo,
   getUserInfo,
