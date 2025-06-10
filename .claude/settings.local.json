@@ -6,7 +6,13 @@
       "Bash(timeout 8s npm run dev)",
       "Bash(curl:*)",
       "Bash(pkill:*)",
-      "Bash(timeout 5s npm start)"
+      "Bash(timeout 5s npm start)",
+      "Bash(npm install:*)",
+      "Bash(node test-graph.js)",
+      "Bash(grep:*)",
+      "Bash(node test-graph-direct.js)",
+      "Bash(node:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

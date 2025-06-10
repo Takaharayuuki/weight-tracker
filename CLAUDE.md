@@ -38,6 +38,7 @@ ngrok http 3000     # Expose local server for LINE webhook testing
 ### Message Processing Logic
 - New users: 4-step registration flow (goal weight, current weight, height, wake time)
 - Registered users: Direct weight recording with validation
+- Graph commands: 「グラフ」「推移」「履歴」で visual chart generation
 - Automatic reminders: Morning (at wake time) and evening (20:00) if no record
 
 ## Critical Implementation Notes

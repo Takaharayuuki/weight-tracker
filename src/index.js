@@ -44,6 +44,9 @@ app.post('/webhook', lineBot.middleware, (req, res) => {
 // ダッシュボード用の静的ファイル配信
 app.use('/dashboard', express.static(path.join(__dirname, '../dashboard')));
 
+// 一時ファイル（グラフ画像）配信
+app.use('/temp', express.static(path.join(__dirname, '../temp')));
+
 // ヘルスチェックエンドポイント
 app.get('/health', (req, res) => {
   const googleAuth = process.env.GOOGLE_CREDENTIALS_BASE64 ? 'environment' : 

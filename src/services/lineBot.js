@@ -3,6 +3,7 @@ const userStore = require('../data/userStore');
 const sheets = require('./sheets');
 const messages = require('../utils/messages');
 const calculations = require('../utils/calculations');
+const { generateWeightGraph, generateTextHistory } = require('../utils/graphGenerator');
 
 // イベントハンドラー
 async function handleEvent(event) {
@@ -71,6 +72,10 @@ async function handleEvent(event) {
         return handleProgressRequest(event, userId, user);
       }
       
+      if (messageText === 'グラフ' || messageText === '推移' || messageText === '履歴') {
+        return handleGraphRequest(event, userId, user);
+      }
+      
       if (messageText === 'ヒント') {
         return client.replyMessage(event.replyToken, messages.getTipMessage());
       }
@@ -90,6 +95,7 @@ async function handleEvent(event) {
 
 体重記録: 数値を送信（例: 69.5）
 進捗確認: 「進捗」と送信
+グラフ表示: 「グラフ」「推移」「履歴」のいずれかを送信
 設定確認: 「設定」と送信  
 登録リセット: 「リセット」と送信
 ヒント: 「ヒント」と送信`
@@ -386,6 +392,104 @@ async function handleResetRequest(event, userId, user) {
 目標体重を入力してください。
 例: 65`
   });
+}
+
+// グラフリクエストの処理
+async function handleGraphRequest(event, userId, user) {
+  console.log('グラフリクエスト処理開始');
+  
+  try {
+    // まず処理開始のメッセージを送信
+    await client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '📊 体重推移グラフを生成中です...\n少々お待ちください。'
+    });
+    
+    try {
+      // グラフを生成
+      const result = await generateWeightGraph(userId, 30);
+      const { imageBuffer, metadata } = result;
+      
+      console.log('グラフ生成成功:', metadata);
+      
+      // 統計情報のテキストメッセージを作成
+      const statsMessage = `📈 ${metadata.days}日間の体重推移
+      
+📊 記録数: ${metadata.recordCount}日分
+📍 現在: ${metadata.currentWeight}kg
+🎯 目標: ${metadata.goalWeight}kg
+📈 最高: ${metadata.maxWeight}kg
+📉 最低: ${metadata.minWeight}kg
+
+${metadata.progress}`;
+
+      // 一時的に画像を保存し、URLを生成（簡易実装）
+      const fs = require('fs');
+      const path = require('path');
+      
+      // 一時ディレクトリに画像を保存
+      const tempDir = path.join(__dirname, '../../temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      
+      const fileName = `graph_${userId}_${Date.now()}.png`;
+      const filePath = path.join(tempDir, fileName);
+      fs.writeFileSync(filePath, imageBuffer);
+      
+      // 公開URL（本番環境では外部URLが必要）
+      const publicUrl = `${process.env.BASE_URL || 'http://localhost:3001'}/temp/${fileName}`;
+      
+      console.log(`画像を保存しました: ${filePath}`);
+      console.log(`公開URL: ${publicUrl}`);
+      
+      // 画像メッセージと統計メッセージを送信
+      await client.pushMessage(userId, [
+        {
+          type: 'image',
+          originalContentUrl: publicUrl,
+          previewImageUrl: publicUrl
+        },
+        {
+          type: 'text',
+          text: statsMessage
+        }
+      ]);
+      
+      // 5分後に一時ファイルを削除
+      setTimeout(() => {
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`一時ファイルを削除しました: ${filePath}`);
+          }
+        } catch (deleteError) {
+          console.error('一時ファイル削除エラー:', deleteError);
+        }
+      }, 5 * 60 * 1000);
+      
+    } catch (graphError) {
+      console.error('グラフ生成エラー:', graphError);
+      
+      // フォールバック: テキストで履歴を表示
+      const weightHistory = await sheets.getUserWeightHistory(userId, 7);
+      const textHistory = generateTextHistory(weightHistory, user);
+      
+      await client.pushMessage(userId, {
+        type: 'text',
+        text: textHistory + '\n\n💡 グラフ機能は記録が増えてから利用できます（最低2日分の記録が必要）'
+      });
+    }
+    
+  } catch (error) {
+    console.error('グラフリクエスト処理エラー:', error);
+    
+    // エラー時のフォールバック
+    return client.pushMessage(userId, {
+      type: 'text',
+      text: '申し訳ございません。グラフの生成に失敗しました。\n\n「進捗」コマンドで数値による進捗を確認できます。'
+    });
+  }
 }
 
 // ユーザーにメッセージを送信
