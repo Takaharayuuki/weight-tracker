@@ -208,6 +208,16 @@ async function handleEvent(event) {
         return handleHelpRequest(event, userId, user);
       }
       
+      // デバッグ用コマンド（開発環境のみ）
+      if (messageText === 'テストリマインダー' && process.env.NODE_ENV !== 'production') {
+        const scheduler = require('./scheduler');
+        await scheduler.testReminderCheck();
+        return client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '🧪 リマインダーテストを実行しました。コンソールログを確認してください。'
+        });
+      }
+      
       // 数値の場合は体重記録
       return handleWeightRecord(event, userId, messageText, user);
     }
@@ -654,19 +664,15 @@ async function handleWeightInputRequest(event, userId, user) {
   const lastWeight = user.currentWeight || 65.0;
   const baseWeight = Math.floor(lastWeight * 10) / 10; // 0.1kg単位で丸める
   
-  // クイック返信ボタンを生成（前後1.5kgの範囲で0.5kg刻み）
+  // クイック返信ボタンを生成（前後1.0kgの範囲で0.1kg刻み）
   const quickReplyItems = [];
   
-  // よく使う体重帯を中心に配置
-  const weights = [
-    baseWeight - 1.5,
-    baseWeight - 1.0,
-    baseWeight - 0.5,
-    baseWeight,
-    baseWeight + 0.5,
-    baseWeight + 1.0,
-    baseWeight + 1.5
-  ];
+  // 連続する体重値を0.1kg刻みで生成
+  const weights = [];
+  for (let i = -10; i <= 10; i++) {
+    const weight = baseWeight + (i * 0.1);
+    weights.push(Math.round(weight * 10) / 10); // 小数点第1位で丸める
+  }
   
   // 有効な体重範囲（30-300kg）に絞る
   weights.forEach(w => {
