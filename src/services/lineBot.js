@@ -662,20 +662,22 @@ async function handleWeightInputRequest(event, userId, user) {
   
   // 前回の体重を基準にクイック返信ボタンを生成
   const lastWeight = user.currentWeight || 65.0;
-  const baseWeight = Math.floor(lastWeight * 10) / 10; // 0.1kg単位で丸める
+  const baseWeight = Math.round(lastWeight * 10) / 10; // 0.1kg単位で丸める
   
-  // クイック返信ボタンを生成（前後1.0kgの範囲で0.1kg刻み）
+  // クイック返信ボタンを生成（実用的な選択肢のみ）
   const quickReplyItems = [];
   
-  // 連続する体重値を0.1kg刻みで生成
-  const weights = [];
-  for (let i = -10; i <= 10; i++) {
-    const weight = baseWeight + (i * 0.1);
-    weights.push(Math.round(weight * 10) / 10); // 小数点第1位で丸める
-  }
+  // オプション1: よく使う体重値（0.5kg刻み）
+  const commonWeights = [
+    baseWeight - 1.0,
+    baseWeight - 0.5,
+    baseWeight,
+    baseWeight + 0.5,
+    baseWeight + 1.0
+  ];
   
-  // 有効な体重範囲（30-300kg）に絞る
-  weights.forEach(w => {
+  // 有効な体重のみ追加
+  commonWeights.forEach(w => {
     if (w >= 30 && w <= 300) {
       quickReplyItems.push({
         type: 'action',
@@ -688,24 +690,12 @@ async function handleWeightInputRequest(event, userId, user) {
     }
   });
   
-  // 前回と同じボタンを強調
-  if (!weights.includes(lastWeight)) {
-    quickReplyItems.unshift({
-      type: 'action',
-      action: {
-        type: 'message',
-        label: `${lastWeight.toFixed(1)}kg`,
-        text: lastWeight.toFixed(1)
-      }
-    });
-  }
-  
-  // その他ボタン
+  // 直接入力オプション
   quickReplyItems.push({
     type: 'action',
     action: {
       type: 'message',
-      label: 'その他',
+      label: 'その他の値を入力',
       text: '直接入力します'
     }
   });
@@ -716,11 +706,12 @@ async function handleWeightInputRequest(event, userId, user) {
   return client.replyMessage(event.replyToken, {
     type: 'text',
     text: `${user.name}さん、おはようございます！☀️\n\n` +
-          `今朝の体重を教えてください💪\n\n` +
+          `今朝の体重を教えてください💪\n` +
+          `（数値を直接入力してください）\n\n` +
           `前回の記録: ${lastWeight.toFixed(1)}kg\n\n` +
           `${motivationalQuote}`,
     quickReply: {
-      items: quickReplyItems.slice(0, 13) // 最大13個
+      items: quickReplyItems
     }
   });
 }
